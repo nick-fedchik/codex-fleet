@@ -9,6 +9,34 @@
 реєстру. Цільовий outbound onboarding, де worker owner вказує лише адресу master,
 є наступним етапом і ще не входить до поточного SSH MVP.
 
+## Що отримує власник worker
+
+Власнику нового Ubuntu-ноутбука потрібно передати:
+
+1. посилання на цей документ;
+2. hostname або IP master для аргументу `MASTER_HOST`;
+3. один рядок master public SSH key через приватний канал.
+
+Не передавати пароль worker-користувача, приватний SSH-ключ або файли master.
+Окремий worker-користувач має бути створений заздалегідь і повинен мати
+локальний `sudo`.
+
+Документ можна відкрити без клонування репозиторію. Скрипт завантажується
+окремо з GitHub і запускається від імені вже створеного worker-користувача:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/scripts/install-ubuntu-worker.sh \
+  -o install-ubuntu-worker.sh
+chmod 0755 install-ubuntu-worker.sh
+./install-ubuntu-worker.sh MASTER_HOST
+```
+
+Якщо репозиторій уже склоновано, замість завантаження можна запустити:
+
+```bash
+./scripts/install-ubuntu-worker.sh MASTER_HOST
+```
+
 Передбачається, що користувач має локальний доступ до ноутбука, права `sudo`,
 підключення до тієї самої локальної мережі, що й master, і може виконувати команди
 в терміналі. Потрібні Ubuntu Desktop або Ubuntu Server із systemd.
