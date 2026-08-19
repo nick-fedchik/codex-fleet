@@ -40,6 +40,18 @@ chmod 0755 install-ubuntu-worker.sh
 ./scripts/install-ubuntu-worker.sh MASTER_HOST
 ```
 
+Перед реальною інсталяцією можна виконати перевірку без змін у системі:
+
+```bash
+./scripts/install-ubuntu-worker.sh --dry-run MASTER_HOST
+```
+
+Повторний звичайний запуск безпечний для вже налаштованого worker: `apt` не
+перевстановлює наявні пакети, існуючий worker-ключ зберігається, public key не
+дублюється, а systemd-сервіси повторно перевіряються та вмикаються. Файл
+`~/.config/codex-fleet/worker.env` є згенерованим і перезаписується актуальними
+значеннями.
+
 У режимі без клонування installer завантажує canonical public key із GitHub.
 Для іншого ключа можна перед запуском задати `CODEX_FLEET_MASTER_KEY_URL` або
 `CODEX_FLEET_MASTER_PUBLIC_KEY`.

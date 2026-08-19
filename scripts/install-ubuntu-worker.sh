@@ -26,7 +26,7 @@ trap on_error ERR
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME MASTER_HOST
+  $SCRIPT_NAME [--dry-run] MASTER_HOST
 
 MASTER_HOST is the master's DNS name or IP address. Run this script as the
 already-created worker user, not as root. The user must have sudo access.
@@ -34,6 +34,9 @@ already-created worker user, not as root. The user must have sudo access.
 The script reads the master's public SSH key from config/master.pub when run
 from a clone. It can also fetch the canonical key from GitHub, use
 CODEX_FLEET_MASTER_PUBLIC_KEY, or ask for the key interactively.
+
+--dry-run checks the platform and reports planned actions without changing the
+system, writing keys, or writing the worker configuration.
 EOF
 }
 
@@ -50,6 +53,12 @@ warn() {
 log() {
     printf '[codex-fleet] %s\n' "$*"
 }
+
+DRY_RUN=0
+if [[ ${1:-} == "--dry-run" ]]; then
+    DRY_RUN=1
+    shift
+fi
 
 if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
     usage
@@ -87,8 +96,6 @@ for command_name in apt-get getent sudo systemctl; do
     command -v "$command_name" >/dev/null 2>&1 || die "required command not found: $command_name"
 done
 
-sudo -v || die "sudo authorization is required"
-
 WORKER_USER=$(id -un)
 WORKER_HOSTNAME=$(hostname)
 
@@ -99,6 +106,31 @@ log "master host: $MASTER_HOST"
 if ! getent ahosts "$MASTER_HOST" >/dev/null 2>&1; then
     warn "MASTER_HOST does not currently resolve; saving it for later use"
 fi
+
+if ((DRY_RUN == 1)); then
+    log "DRY RUN: no changes will be made"
+    if command -v ollama >/dev/null 2>&1; then
+        log "Ollama is already installed"
+    else
+        log "would install Ollama using the official installer"
+    fi
+    if [[ -e "$WORKER_KEY" ]]; then
+        log "would keep existing worker key: $WORKER_KEY"
+    else
+        log "would create worker key: $WORKER_KEY"
+    fi
+    if [[ -f "$CONFIG_FILE" ]]; then
+        log "would refresh generated configuration: $CONFIG_FILE"
+    else
+        log "would create worker configuration: $CONFIG_FILE"
+    fi
+    log "would install/update apt dependencies: curl, openssh-client, openssh-server, ca-certificates"
+    log "would enable and start ssh.service and ollama.service"
+    log "would authorize the master public key with restricted SSH options"
+    exit 0
+fi
+
+sudo -v || die "sudo authorization is required"
 
 log "installing system dependencies"
 sudo apt-get update

@@ -108,6 +108,16 @@ the master. Custom or offline deployments can provide a different key through
 `CODEX_FLEET_MASTER_KEY_URL` or `CODEX_FLEET_MASTER_PUBLIC_KEY`. See the
 [Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md).
 
+Preview the planned actions without changing the worker:
+
+```bash
+./scripts/install-ubuntu-worker.sh --dry-run MASTER_HOST
+```
+
+Normal reruns are idempotent: existing packages and keys are kept, duplicate
+authorized keys are not added, services are rechecked, and only the generated
+worker configuration is refreshed.
+
 If the master is shared by multiple people or services, run `codex-fleet` under
 a dedicated local account without `sudo`. Generate the SSH key as that account;
 do not use `sudo ssh-keygen`, because that creates a root-owned key. A separate
