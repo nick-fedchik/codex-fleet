@@ -91,7 +91,7 @@ dedicated login already exists. Run it as that user and pass only the master's
 hostname or IP address:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/scripts/install-ubuntu-worker.sh \
+curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
 chmod 0755 install-ubuntu-worker.sh
 ./install-ubuntu-worker.sh MASTER_HOST

@@ -11,7 +11,7 @@ readonly AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
 readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_worker}"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
-readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/config/master.pub}"
+readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://github.com/nick-fedchik/codex-fleet/releases/latest/download/master.pub}"
 declare -a WARNINGS=()
 
 on_error() {

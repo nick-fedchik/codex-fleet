@@ -28,7 +28,7 @@
 окремо з GitHub і запускається від імені вже створеного worker-користувача:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/scripts/install-ubuntu-worker.sh \
+curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
 chmod 0755 install-ubuntu-worker.sh
 ./install-ubuntu-worker.sh MASTER_HOST
@@ -82,7 +82,7 @@ chmod 0755 install-ubuntu-worker.sh
 завантажити без Git і запустити від імені цього користувача:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/scripts/install-ubuntu-worker.sh \
+curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
 chmod 0755 install-ubuntu-worker.sh
 ./install-ubuntu-worker.sh MASTER_HOST
