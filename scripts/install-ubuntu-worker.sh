@@ -12,6 +12,16 @@ readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_w
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
 readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/config/master.pub}"
+declare -a WARNINGS=()
+
+on_error() {
+    local status=$?
+    printf 'error: command failed at line %s: %s (exit %s)\n' \
+        "$LINENO" "$BASH_COMMAND" "$status" >&2
+    exit "$status"
+}
+
+trap on_error ERR
 
 usage() {
     cat <<EOF
@@ -34,6 +44,7 @@ die() {
 
 warn() {
     printf 'warning: %s\n' "$*" >&2
+    WARNINGS+=("$*")
 }
 
 log() {
@@ -174,11 +185,30 @@ log "writing worker configuration"
 } >"$CONFIG_FILE"
 chmod 600 "$CONFIG_FILE"
 
-if ! curl --silent --fail --show-error --max-time 5 http://127.0.0.1:11434/api/tags >/dev/null; then
+ollama_ready=0
+for ((attempt = 1; attempt <= 15; attempt++)); do
+    if curl --silent --fail --show-error --max-time 5 \
+        http://127.0.0.1:11434/api/tags >/dev/null; then
+        ollama_ready=1
+        break
+    fi
+    sleep 1
+done
+
+if ((ollama_ready == 0)); then
     warn "Ollama API is not responding yet; inspect with: sudo systemctl status ollama"
+else
+    log "Ollama API is ready"
 fi
 
-printf '\nWorker installation completed.\n'
+if ((${#WARNINGS[@]} == 0)); then
+    printf '\nSUCCESS: worker installation completed without warnings.\n'
+else
+    printf '\nCOMPLETED WITH WARNINGS: worker installation finished, but review:\n'
+    for warning in "${WARNINGS[@]}"; do
+        printf '  - %s\n' "$warning"
+    done
+fi
 printf 'Configuration: %s\n' "$CONFIG_FILE"
 printf 'Worker public key: %s.pub\n' "$WORKER_KEY"
 printf '\nNext steps:\n'
