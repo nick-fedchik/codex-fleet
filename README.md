@@ -106,6 +106,11 @@ For the current inbound SSH transport, generate the access key on the master and
 copy only its `.pub` file to the worker's `authorized_keys`; see the
 [Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md).
 
+If the master is shared by multiple people or services, run `codex-fleet` under
+a dedicated local account without `sudo`. Generate the SSH key as that account;
+do not use `sudo ssh-keygen`, because that creates a root-owned key. A separate
+master account is optional when the master is a single-user laptop.
+
 ## Build from source
 
 Clone the repository and enter its directory:

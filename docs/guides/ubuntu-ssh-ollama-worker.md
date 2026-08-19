@@ -155,13 +155,14 @@ worker-користувача передавати не потрібно.
 
 ```bash
 install -d -m 700 ~/.ssh
-printf '%s\n' 'MASTER_PUBLIC_KEY' >> ~/.ssh/authorized_keys
+printf '%s\n' 'restrict MASTER_PUBLIC_KEY' >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 ```
 
 `MASTER_PUBLIC_KEY` має бути одним повним рядком, що починається з `ssh-ed25519`
 або іншого дозволеного типу OpenSSH. Не додавати переносів рядка всередині
-ключа.
+ключа. Префікс `restrict` вимикає TTY, agent forwarding, X11 forwarding і
+port forwarding, але залишає дозволеними команди, які потрібні поточному CLI.
 
 Власник worker повідомляє master operator лише `WORKER_HOST` або `WORKER_IP`,
 `WORKER_USER` і, якщо потрібно, SSH-порт. Пароль worker-користувача master

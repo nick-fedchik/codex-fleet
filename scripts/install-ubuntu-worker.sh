@@ -126,13 +126,14 @@ if [[ -n "$MASTER_PUBLIC_KEY" ]]; then
         die "master public key must be one line"
     printf '%s\n' "$MASTER_PUBLIC_KEY" | ssh-keygen -lf - >/dev/null 2>&1 || \
         die "master public key is not a valid OpenSSH public key"
+    AUTHORIZED_KEY_ENTRY="restrict $MASTER_PUBLIC_KEY"
     touch "$AUTHORIZED_KEYS"
     chmod 600 "$AUTHORIZED_KEYS"
-    if grep -Fqx -- "$MASTER_PUBLIC_KEY" "$AUTHORIZED_KEYS"; then
+    if grep -Fqx -- "$AUTHORIZED_KEY_ENTRY" "$AUTHORIZED_KEYS"; then
         log "master public key is already authorized"
     else
-        printf '%s\n' "$MASTER_PUBLIC_KEY" >>"$AUTHORIZED_KEYS"
-        log "master public key added to $AUTHORIZED_KEYS"
+        printf '%s\n' "$AUTHORIZED_KEY_ENTRY" >>"$AUTHORIZED_KEYS"
+        log "restricted master public key added to $AUTHORIZED_KEYS"
     fi
 else
     warn "master public key was not supplied; passwordless master SSH is not configured"
