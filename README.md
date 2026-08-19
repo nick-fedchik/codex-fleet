@@ -246,6 +246,11 @@ codex-fleet worker run WORKER_NAME \
   --format json
 ```
 
+For a large model or slow first load, increase the operation timeout, for
+example `--timeout 30m`. The SSH transport uses keepalive probes and passes the
+same timeout to the remote Ollama request, so it is not limited to a fixed
+10-minute request window.
+
 If a worker is powered off, `worker check` returns a non-zero exit status. A
 successful SSH check only proves that SSH and the Ollama API respond; a large
 model may still need several minutes to load. Use `worker warmup` to measure

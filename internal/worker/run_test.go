@@ -29,3 +29,23 @@ func TestTransportRunUsesRemoteOllamaResponse(t *testing.T) {
 		t.Fatalf("Run() metrics = load %d total %d", result.LoadDuration, result.TotalDuration)
 	}
 }
+
+func TestTransportRemoteTimeoutFollowsOperationTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		want    int
+	}{
+		{name: "configured", timeout: 31 * time.Minute, want: 1860},
+		{name: "default", timeout: 0, want: 10},
+		{name: "minimum", timeout: 500 * time.Millisecond, want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := (Transport{Timeout: tt.timeout}).remoteTimeoutSeconds(); got != tt.want {
+				t.Fatalf("remoteTimeoutSeconds() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

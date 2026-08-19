@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -85,7 +86,7 @@ func (t Transport) generate(ctx context.Context, worker config.Worker, model, pr
 		return GenerationResult{}, fmt.Errorf("encode prompt: %w", err)
 	}
 	encoded := base64.StdEncoding.EncodeToString(payload)
-	remote := fmt.Sprintf("printf '%%s' '%s' | base64 -d | curl -fsS --max-time 600 -H 'Content-Type: application/json' -d @- http://127.0.0.1:11434/api/generate", encoded)
+	remote := fmt.Sprintf("printf '%%s' '%s' | base64 -d | curl -fsS --max-time %d -H 'Content-Type: application/json' -d @- http://127.0.0.1:11434/api/generate", encoded, t.remoteTimeoutSeconds())
 	output, err := t.run(ctx, worker, remote, nil)
 	if err != nil {
 		return GenerationResult{}, err
@@ -123,13 +124,17 @@ func (t Transport) inspect(ctx context.Context, worker config.Worker) (Inspectio
 }
 
 func (t Transport) run(ctx context.Context, worker config.Worker, remote string, stdin []byte) ([]byte, error) {
-	timeout := t.Timeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
+	timeout := t.operationTimeout()
 	commandCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	args := []string{"-T", "-o", "BatchMode=yes", "-o", "RequestTTY=no", "-o", "ConnectTimeout=5"}
+	args := []string{
+		"-T",
+		"-o", "BatchMode=yes",
+		"-o", "RequestTTY=no",
+		"-o", "ConnectTimeout=5",
+		"-o", "ServerAliveInterval=30",
+		"-o", "ServerAliveCountMax=3",
+	}
 	if worker.Port > 0 {
 		args = append(args, "-p", strconv.Itoa(worker.Port))
 	}
@@ -159,6 +164,21 @@ func (t Transport) run(ctx context.Context, worker config.Worker, remote string,
 		return nil, fmt.Errorf("SSH transport: %s", message)
 	}
 	return stdout.Bytes(), nil
+}
+
+func (t Transport) operationTimeout() time.Duration {
+	if t.Timeout <= 0 {
+		return 10 * time.Second
+	}
+	return t.Timeout
+}
+
+func (t Transport) remoteTimeoutSeconds() int {
+	seconds := int(math.Ceil(t.operationTimeout().Seconds()))
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 func parseInspection(name string, output []byte) (Inspection, error) {
