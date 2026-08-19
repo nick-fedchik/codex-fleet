@@ -23,6 +23,24 @@ in [`docs/requirements/status.md`](docs/requirements/status.md).
 Monitoring TUI, dynamic outbound registration, NATS, native Windows agent, and
 repository workspace jobs are intentionally later milestones.
 
+## Compatibility
+
+The minimum supported Ubuntu release for the master/build machine and native
+Linux SSH workers is **Ubuntu 24.04 LTS**. Newer Ubuntu releases are supported;
+Ubuntu 26.04 LTS is the recommended baseline for a fresh installation.
+
+The current module requires Go 1.25 or newer. Ubuntu 26.04 provides Go 1.26
+from the official Ubuntu repositories, so the complete master setup is:
+
+```bash
+sudo apt update
+sudo apt install -y git openssh-client golang-go
+```
+
+On Ubuntu 24.04, verify `go version` before building. The default Ubuntu Go
+package may be older than 1.25, so install Go 1.25+ using the [official Go
+installation instructions](https://go.dev/doc/install) when necessary.
+
 ## Dependencies
 
 ### Master / build machine

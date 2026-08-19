@@ -78,7 +78,9 @@ WSL2 does not automatically provide a remote console, but running `sshd` inside 
 
 ## Existing Linux path
 
-Linux hosts may use the already working SSH transport. The first known worker is:
+Ubuntu 24.04 LTS is the minimum supported Ubuntu release for the documented
+Linux path. Newer Ubuntu releases are supported. Linux hosts may use the
+already working SSH transport. The first known worker is:
 
 ```text
 ssh jetson-codex
