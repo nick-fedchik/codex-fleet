@@ -58,6 +58,10 @@ ollama list
 додав його до реєстру. `MASTER_HOST` зберігається в конфігурації для наступного
 outbound onboarding.
 
+Installer створює worker-ключ для майбутнього outbound-agent. Для поточного
+напрямку `master -> SSH -> worker` потрібен інший ключ: його створюють на master,
+а worker отримує лише публічну `.pub`-частину.
+
 ## 1. Підготувати worker
 
 Відкрити термінал на новому Ubuntu-ноутбуці й виконати:
@@ -116,13 +120,16 @@ master можна задати безпосередньо в конфігура�
 
 ## 2. Підготувати SSH-ключ на master
 
-На master створити окрему пару ключів. Якщо fleet-ключ уже існує, повторно
-його не створювати:
+Цей ключ створюється на master-користувачі, який запускає `codex-fleet`. Якщо
+він уже існує, повторно його не створювати:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_codex_fleet \
   -C codex-fleet-master
 ```
+
+Приватний файл `~/.ssh/id_ed25519_codex_fleet` залишається тільки на master.
+На worker передається лише `~/.ssh/id_ed25519_codex_fleet.pub`.
 
 Потрібен файл `~/.ssh/id_ed25519_codex_fleet.pub`. Приватний файл без `.pub`
 нікому не передавати.
@@ -131,6 +138,9 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_codex_fleet \
 публічну частину замість створення нової пари.
 
 ## 3. Передати ключ на worker
+
+Перший запуск `ssh-copy-id` може попросити пароль `WORKER_USER`. Це нормальний
+одноразовий крок: після нього master входить без пароля через приватний ключ.
 
 З master виконати:
 
@@ -147,6 +157,19 @@ ssh-copy-id -i ~/.ssh/id_ed25519_codex_fleet.pub WORKER_USER@WORKER_IP
 cat ~/.ssh/id_ed25519_codex_fleet.pub | \
   ssh WORKER_USER@WORKER_IP 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys'
 ```
+
+Перевірити безпарольний доступ:
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=5 \
+  WORKER_USER@WORKER_IP \
+  'hostname; id -un; ollama list'
+```
+
+Не копіювати приватний ключ на worker і не додавати його до GitHub. Файл
+`~/.ssh/id_ed25519_codex_fleet_worker`, який створює installer на worker,
+призначений для майбутнього outbound-agent і не замінює master-ключ у цьому
+SSH-MVP.
 
 ## 4. Встановити Ollama на worker
 

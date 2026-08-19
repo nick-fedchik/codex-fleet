@@ -100,6 +100,9 @@ chmod 0755 install-ubuntu-worker.sh
 The script checks Ubuntu 24.04+, installs SSH and Ollama, enables their services,
 creates a worker key, and writes `~/.config/codex-fleet/worker.env`. It does not
 create a user, download an unspecified model, or change the master's SSH keys.
+For the current inbound SSH transport, generate the access key on the master and
+copy only its `.pub` file to the worker's `authorized_keys`; see the
+[Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md).
 
 ## Build from source
 
