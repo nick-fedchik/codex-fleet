@@ -16,7 +16,7 @@ Status values:
 | CF-002 | Local worker registry | done | add/list/remove persist worker records without secrets |
 | CF-003 | Live worker availability check | done | bounded SSH + Ollama check returns stable exit status on `jetson-codex` |
 | CF-004 | Worker inspection | done | hostname, user, Ollama models and runtime state are readable on `jetson-codex` |
-| CF-005 | Single prompt execution | in-progress | explicit model/prompt runs on a named worker and returns text |
+| CF-005 | Single prompt execution | done | explicit model/prompt returned `worker online` from `gpt-oss:20b` on `jetson-codex` |
 | CF-006 | Native Ubuntu onboarding | done | public step-by-step SSH/Ollama guide exists |
 | CF-007 | Windows 11 native worker | open | standalone agent runs without WSL or admin privileges |
 | CF-008 | Windows 11 + WSL2 worker | done | public WSL2 + dedicated-user SSH guide exists |
