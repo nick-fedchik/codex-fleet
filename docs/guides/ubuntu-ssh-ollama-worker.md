@@ -15,8 +15,8 @@
 
 1. посилання на цей документ;
 2. hostname або IP master для аргументу `MASTER_HOST`;
-3. для стандартного репозиторію більше нічого: public key master уже лежить у
-   `config/master.pub` і є доступним скрипту.
+3. один файл із public key master-користувача або його вміст через погоджений
+   параметр запуску.
 
 Для fork, offline-режиму або іншого master public key передається окремо одним
 рядком через погоджений канал. Не передавати пароль worker-користувача,
@@ -48,10 +48,20 @@ sudo ./install-ubuntu-worker.sh --worker-user ai-worker MASTER_HOST
 наявність доступу до `sudo`. Під час створення нового користувача Ubuntu
 запитає його пароль.
 
-Canonical public key master уже вбудований в installer, тому окремо копіювати
-або вставляти його не потрібно. Файл `master.pub`, який лежить поруч із
-installer, або `CODEX_FLEET_MASTER_PUBLIC_KEY` можуть перевизначити ключ для
-custom/offline deployment.
+Public key не вбудовується в installer: він належить конкретному локальному
+користувачу master, який запускає `codex-fleet`. Рекомендований варіант —
+передати файл явно:
+
+```bash
+sudo ./install-ubuntu-worker.sh \
+  --worker-user ai-worker \
+  --master-public-key-file /path/to/master-user.pub \
+  MASTER_HOST
+```
+
+Також можна задати ключ через `CODEX_FLEET_MASTER_PUBLIC_KEY` або покласти файл
+з одним рядком `master.pub` поруч із installer. Усі ці варіанти не потребують
+copy-paste ключа в інтерактивному prompt.
 
 Якщо репозиторій уже склоновано, замість завантаження можна запустити:
 
@@ -71,9 +81,9 @@ sudo ./scripts/install-ubuntu-worker.sh --dry-run MASTER_HOST
 `~/.config/codex-fleet/worker.env` є згенерованим і перезаписується актуальними
 значеннями.
 
-У режимі без клонування installer завантажує canonical public key із GitHub.
-Для іншого ключа можна перед запуском задати `CODEX_FLEET_MASTER_KEY_URL` або
-`CODEX_FLEET_MASTER_PUBLIC_KEY`.
+У режимі без клонування installer не завантажує і не вгадує master public key:
+його потрібно передати через `--master-public-key-file`, змінну
+`CODEX_FLEET_MASTER_PUBLIC_KEY` або локальний `master.pub` поруч зі скриптом.
 
 Передбачається, що користувач має локальний доступ до ноутбука, права `sudo`,
 підключення до тієї самої локальної мережі, що й master, і може виконувати команди
@@ -138,10 +148,9 @@ RAM/VRAM. Це нормально: перший `worker run` завантажи�
 outbound onboarding.
 
 Installer створює worker-ключ для майбутнього outbound-agent. Для поточного
-напрямку `master -> SSH -> worker` використовується canonical public key із
-`config/master.pub`. Його приватна відповідна частина залишається тільки на
-master. Для custom/offline-режиму installer приймає public key через змінну або
-інтерактивний prompt.
+напрямку `master -> SSH -> worker` worker авторизує public key саме того
+локального master-користувача, від імені якого виконуватимуться SSH-операції.
+Приватна відповідна частина залишається тільки на master.
 
 ## 1. Підготувати worker
 
@@ -201,8 +210,8 @@ master можна задати безпосередньо в конфігура�
 
 ## 2. Підготувати SSH-ключ на master
 
-Цей ключ створюється на master-користувачі, який запускає `codex-fleet`. Якщо
-він уже існує, повторно його не створювати:
+Цей ключ створюється на тому самому локальному master-користувачі, який
+запускає `codex-fleet`. Якщо він уже існує, повторно його не створювати:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_codex_fleet \
@@ -230,9 +239,17 @@ worker-користувача передавати не потрібно.
 
 ## 3. Додати ключ на worker
 
-На worker інсталятор попросить вставити один рядок master public key. Якщо
-інсталятор уже був запущений без ключа, додати його вручну під поточним
-`WORKER_USER`:
+На worker передайте цей файл під час запуску installer. Якщо інсталятор уже
+був запущений без ключа, повторіть запуск із параметром:
+
+```bash
+sudo ./install-ubuntu-worker.sh \
+  --worker-user WORKER_USER \
+  --master-public-key-file /path/to/id_ed25519_codex_fleet.pub \
+  MASTER_HOST
+```
+
+Або додайте ключ вручну під поточним `WORKER_USER`:
 
 ```bash
 install -d -m 700 ~/.ssh

@@ -96,14 +96,24 @@ func newWorkerAddCommand(opts *options, output, diagnostics io.Writer) *cobra.Co
 	var port int
 	var verify bool
 	command := &cobra.Command{
-		Use:   "add HOST | add NAME --ssh-host HOST",
+		Use:   "add [USER@]HOST | add NAME --ssh-host HOST",
 		Short: "Register or update a worker",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			if strings.TrimSpace(sshHost) == "" {
-				sshHost = args[0]
+				parsedUser, parsedHost, err := parseWorkerTarget(args[0])
+				if err != nil {
+					return err
+				}
+				sshHost = parsedHost
 				name = workerNameFromHost(sshHost)
+				if parsedUser != "" {
+					if strings.TrimSpace(sshUser) != "" && sshUser != parsedUser {
+						return fmt.Errorf("worker target user %q conflicts with --user %q", parsedUser, sshUser)
+					}
+					sshUser = parsedUser
+				}
 				if strings.TrimSpace(sshUser) == "" {
 					sshUser = "codex-fleet"
 				}
@@ -134,12 +144,30 @@ func newWorkerAddCommand(opts *options, output, diagnostics io.Writer) *cobra.Co
 		},
 	}
 	command.Flags().StringVar(&sshHost, "ssh-host", "", "SSH host or existing SSH alias")
-	command.Flags().StringVar(&sshUser, "ssh-user", "", "SSH user (default: codex-fleet in shorthand form)")
-	command.Flags().StringVar(&sshUser, "user", "", "alias for --ssh-user")
+	command.Flags().StringVar(&sshUser, "ssh-user", "", "remote SSH user (default: codex-fleet without USER@ in shorthand form)")
+	command.Flags().StringVar(&sshUser, "user", "", "alias for --ssh-user; this is the remote worker user")
 	command.Flags().IntVar(&port, "port", 0, "optional SSH port")
 	command.Flags().StringVar(&identity, "identity", "", "SSH identity file (default: ~/.ssh/id_ed25519_codex_fleet in shorthand form)")
 	command.Flags().BoolVar(&verify, "check", false, "check the worker immediately after registration")
 	return command
+}
+
+func parseWorkerTarget(target string) (user, host string, err error) {
+	if strings.TrimSpace(target) == "" {
+		return "", "", fmt.Errorf("worker target is required")
+	}
+	at := strings.LastIndexByte(target, '@')
+	if at < 0 {
+		return "", target, nil
+	}
+	user, host = target[:at], target[at+1:]
+	if user == "" || host == "" {
+		return "", "", fmt.Errorf("worker target must use USER@HOST")
+	}
+	if strings.ContainsAny(user, " \t\r\n") || strings.ContainsAny(host, " \t\r\n") {
+		return "", "", fmt.Errorf("worker target must be a single USER@HOST value")
+	}
+	return user, host, nil
 }
 
 func workerNameFromHost(host string) string {

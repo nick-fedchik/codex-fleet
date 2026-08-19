@@ -107,16 +107,11 @@ The script checks Ubuntu 24.04+, installs SSH and Ollama, enables their services
 creates a worker key, and writes `~/.config/codex-fleet/worker.env`. It does not
 download an unspecified model or change the master's SSH keys. Existing worker
 users and keys are reused.
-The canonical master public key is bundled in the installer, so downloading
-`master.pub` separately is optional. A neighboring `master.pub` or
-`CODEX_FLEET_MASTER_PUBLIC_KEY` can override it for custom deployments.
-During an interactive run it can add the master's one-line public key to the
-current user's `authorized_keys`.
-For the current inbound SSH transport, the canonical public key is stored in
-[`config/master.pub`](config/master.pub); its private counterpart stays only on
-the master. Custom or offline deployments can provide a different key through
-`CODEX_FLEET_MASTER_KEY_URL` or `CODEX_FLEET_MASTER_PUBLIC_KEY`. See the
-[Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md).
+The master public key is per master user and is never bundled in the release.
+Pass the one-line `.pub` file explicitly with `--master-public-key-file PATH`,
+set `CODEX_FLEET_MASTER_PUBLIC_KEY`, or place the file as `master.pub` beside
+the installer. The first two forms take precedence. See the [Ubuntu worker
+guide](docs/guides/ubuntu-ssh-ollama-worker.md).
 
 Preview the planned actions without changing the worker:
 
@@ -128,10 +123,10 @@ Normal reruns are idempotent: existing packages and keys are kept, duplicate
 authorized keys are not added, services are rechecked, and only the generated
 worker configuration is refreshed.
 
-If the master is shared by multiple people or services, run `codex-fleet` under
-a dedicated local account without `sudo`. Generate the SSH key as that account;
-do not use `sudo ssh-keygen`, because that creates a root-owned key. A separate
-master account is optional when the master is a single-user laptop.
+Run `codex-fleet` as the local master user who owns the SSH key and worker
+registry. Generate the key as that user; do not use `sudo ssh-keygen`, because
+that creates a root-owned key. A separate shared service account is optional,
+not required.
 
 ## Build from source
 
@@ -192,16 +187,20 @@ ssh worker-alias 'hostname; id -un; ollama list'
 Register and verify the worker:
 
 ```bash
-codex-fleet worker add WORKER_IP --check
+codex-fleet worker add WORKER_USER@WORKER_IP --check
 ```
 
-The short form derives the worker name from the IP, uses the `codex-fleet` SSH
-user, and uses `~/.ssh/id_ed25519_codex_fleet`. Override only the SSH user when
-needed:
+The short form derives the worker name from the host, uses the current master
+user's `~/.ssh/id_ed25519_codex_fleet`, and accepts the remote SSH login in the
+usual `USER@HOST` form. If the remote login is omitted, it defaults to
+`codex-fleet`:
 
 ```bash
 codex-fleet worker add WORKER_IP --user WORKER_USER --check
 ```
+
+Here `--user` is the remote worker login; it is not the local user running
+Codex.
 
 The explicit form remains available for aliases and custom identities:
 

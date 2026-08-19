@@ -28,7 +28,7 @@ codex-fleet
 Initial examples:
 
 ```bash
-codex-fleet worker add WORKER_IP --check
+codex-fleet worker add WORKER_USER@WORKER_IP --check
 codex-fleet worker add WORKER_IP --user WORKER_USER --check
 
 codex-fleet worker add WORKER_NAME \
@@ -54,9 +54,11 @@ inspection, and execution is intentional and should remain stable.
 
 ### `worker add`
 
-Adds or updates a local worker record. The shorthand `worker add WORKER_IP`
-derives the record name, defaults to SSH user `codex-fleet`, and uses
-`~/.ssh/id_ed25519_codex_fleet`. Use `--user` for a different SSH login. The
+Adds or updates a local worker record. The shorthand `worker add
+WORKER_USER@WORKER_IP` derives the record name, stores `WORKER_USER` as the
+remote SSH login, and uses the current master's `~/.ssh/id_ed25519_codex_fleet`.
+Without `USER@`, the SSH user defaults to `codex-fleet`. `--user` is an alias
+for the remote SSH login when the target is supplied without a user. The
 explicit `NAME --ssh-host HOST` form remains available for aliases and custom
 transport settings. It does not silently run a job; the operator may request
 an immediate verification with `--check`.

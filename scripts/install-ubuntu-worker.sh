@@ -12,9 +12,6 @@ readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_w
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
 readonly LOCAL_MASTER_KEY_FILE="$SCRIPT_DIR/master.pub"
-readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
-readonly DEFAULT_MASTER_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJF28jVGywii+rWyB+JxO0EGKdeolK4s/hxEtX/D1wTL codex-fleet-master"
-readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://github.com/nick-fedchik/codex-fleet/releases/latest/download/master.pub}"
 declare -a WARNINGS=()
 
 on_error() {
@@ -29,16 +26,16 @@ trap on_error ERR
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME [--dry-run] [--worker-user USER] MASTER_HOST
+  $SCRIPT_NAME [--dry-run] [--worker-user USER] [--master-public-key-file PATH] MASTER_HOST
 
 MASTER_HOST is the master's DNS name or IP address. Run this script as the
 worker user. When run as root, the default worker username is "worker"; the
 script creates it when needed, grants it sudo access, and continues as that
 user. Use --worker-user to choose another username.
 
-The script has the canonical codex-fleet master's public key built in. It can
-also use CODEX_FLEET_MASTER_PUBLIC_KEY, a neighboring master.pub, or
-config/master.pub for custom/offline setups.
+The master public key is supplied by the master operator. Use
+--master-public-key-file PATH, CODEX_FLEET_MASTER_PUBLIC_KEY, or place a
+one-line master.pub beside this script. The first two take precedence.
 
 --dry-run checks the platform and reports planned actions without changing the
 system, writing keys, or writing the worker configuration.
@@ -46,6 +43,9 @@ system, writing keys, or writing the worker configuration.
 --worker-user USER selects the worker login. If the login does not exist and
 the script is run as root, it is created. When run as a non-root user, USER
 must match the current login.
+
+--master-public-key-file PATH supplies the public key that is authorized to
+connect to this worker. The file must contain exactly one OpenSSH public key.
 EOF
 }
 
@@ -63,8 +63,32 @@ log() {
     printf '[codex-fleet] %s\n' "$*"
 }
 
+load_master_public_key() {
+    if [[ -n "$MASTER_PUBLIC_KEY_FILE_OPTION" ]]; then
+        [[ -r "$MASTER_PUBLIC_KEY_FILE_OPTION" ]] || \
+            die "master public key file is not readable: $MASTER_PUBLIC_KEY_FILE_OPTION"
+        MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' \
+            "$MASTER_PUBLIC_KEY_FILE_OPTION") || \
+            die "master public key file must contain exactly one non-empty line: $MASTER_PUBLIC_KEY_FILE_OPTION"
+    elif [[ -n "${CODEX_FLEET_MASTER_PUBLIC_KEY:-}" ]]; then
+        MASTER_PUBLIC_KEY=$CODEX_FLEET_MASTER_PUBLIC_KEY
+    elif [[ -f "$LOCAL_MASTER_KEY_FILE" ]]; then
+        MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' \
+            "$LOCAL_MASTER_KEY_FILE") || \
+            die "master public key file must contain exactly one non-empty line: $LOCAL_MASTER_KEY_FILE"
+    else
+        die "master public key is required; use --master-public-key-file PATH, CODEX_FLEET_MASTER_PUBLIC_KEY, or place master.pub beside the installer"
+    fi
+
+    [[ $MASTER_PUBLIC_KEY != *$'\n'* && $MASTER_PUBLIC_KEY != *$'\r'* ]] || \
+        die "master public key must be one line"
+    printf '%s\n' "$MASTER_PUBLIC_KEY" | ssh-keygen -lf - >/dev/null 2>&1 || \
+        die "master public key is not a valid OpenSSH public key"
+}
+
 DRY_RUN=0
 WORKER_USER_OPTION=""
+MASTER_PUBLIC_KEY_FILE_OPTION=""
 MASTER_HOST=""
 while (($# > 0)); do
     case $1 in
@@ -80,6 +104,16 @@ while (($# > 0)); do
         --worker-user=*)
             WORKER_USER_OPTION=${1#*=}
             [[ -n "$WORKER_USER_OPTION" ]] || die "--worker-user requires a username"
+            shift
+            ;;
+        --master-public-key-file)
+            (($# >= 2)) || die "--master-public-key-file requires a path"
+            MASTER_PUBLIC_KEY_FILE_OPTION=$2
+            shift 2
+            ;;
+        --master-public-key-file=*)
+            MASTER_PUBLIC_KEY_FILE_OPTION=${1#*=}
+            [[ -n "$MASTER_PUBLIC_KEY_FILE_OPTION" ]] || die "--master-public-key-file requires a path"
             shift
             ;;
         -h|--help)
@@ -128,9 +162,12 @@ command -v dpkg >/dev/null 2>&1 || die "dpkg is required"
 dpkg --compare-versions "${VERSION_ID:-0}" ge "$MIN_UBUNTU_VERSION" || \
     die "Ubuntu $MIN_UBUNTU_VERSION or newer is required (found ${VERSION_ID:-unknown})"
 
-for command_name in apt-get getent sudo systemctl; do
+for command_name in apt-get getent ssh-keygen sudo systemctl; do
     command -v "$command_name" >/dev/null 2>&1 || die "required command not found: $command_name"
 done
+
+MASTER_PUBLIC_KEY=""
+load_master_public_key
 
 WORKER_HOSTNAME=$(hostname)
 
@@ -179,12 +216,16 @@ if [[ $EUID -eq 0 ]]; then
         log "DRY RUN: no changes will be made"
         [[ -r "$SCRIPT_PATH" ]] || die "worker user cannot read installer at $SCRIPT_PATH; move it to a shared directory"
         log "DRY RUN: checking the remaining installation as $WORKER_USER"
-        exec sudo -iu "$WORKER_USER" -- "$SCRIPT_PATH" --dry-run --worker-user "$WORKER_USER" "$MASTER_HOST"
+        reexec_args=(--dry-run --worker-user "$WORKER_USER")
+        reexec_env=(env "CODEX_FLEET_MASTER_PUBLIC_KEY=$MASTER_PUBLIC_KEY")
+        exec sudo -iu "$WORKER_USER" -- "${reexec_env[@]}" "$SCRIPT_PATH" "${reexec_args[@]}" "$MASTER_HOST"
     fi
 
     [[ -r "$SCRIPT_PATH" ]] || die "worker user cannot read installer at $SCRIPT_PATH; move it to a shared directory"
     log "continuing installation as $WORKER_USER"
-    exec sudo -iu "$WORKER_USER" -- "$SCRIPT_PATH" --worker-user "$WORKER_USER" "$MASTER_HOST"
+    reexec_args=(--worker-user "$WORKER_USER")
+    reexec_env=(env "CODEX_FLEET_MASTER_PUBLIC_KEY=$MASTER_PUBLIC_KEY")
+    exec sudo -iu "$WORKER_USER" -- "${reexec_env[@]}" "$SCRIPT_PATH" "${reexec_args[@]}" "$MASTER_HOST"
 fi
 
 if ((DRY_RUN == 1)); then
@@ -243,38 +284,14 @@ umask 077
 mkdir -p "$SSH_DIR" "$CONFIG_DIR"
 chmod 700 "$SSH_DIR" "$CONFIG_DIR"
 
-MASTER_PUBLIC_KEY=${CODEX_FLEET_MASTER_PUBLIC_KEY:-}
-if [[ -z "$MASTER_PUBLIC_KEY" && -f "$LOCAL_MASTER_KEY_FILE" ]]; then
-    MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' "$LOCAL_MASTER_KEY_FILE") || \
-        die "invalid master public key file: $LOCAL_MASTER_KEY_FILE"
-fi
-if [[ -z "$MASTER_PUBLIC_KEY" && -f "$REPO_MASTER_KEY_FILE" ]]; then
-    MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' "$REPO_MASTER_KEY_FILE") || \
-        die "invalid master public key file: $REPO_MASTER_KEY_FILE"
-fi
-if [[ -z "$MASTER_PUBLIC_KEY" ]]; then
-    MASTER_PUBLIC_KEY=$(curl --silent --fail --show-error --max-time 10 "$MASTER_KEY_URL" 2>/dev/null || true)
-fi
-if [[ -z "$MASTER_PUBLIC_KEY" ]]; then
-    MASTER_PUBLIC_KEY=$DEFAULT_MASTER_PUBLIC_KEY
-fi
-
-if [[ -n "$MASTER_PUBLIC_KEY" ]]; then
-    [[ $MASTER_PUBLIC_KEY != *$'\n'* && $MASTER_PUBLIC_KEY != *$'\r'* ]] || \
-        die "master public key must be one line"
-    printf '%s\n' "$MASTER_PUBLIC_KEY" | ssh-keygen -lf - >/dev/null 2>&1 || \
-        die "master public key is not a valid OpenSSH public key"
-    AUTHORIZED_KEY_ENTRY="restrict $MASTER_PUBLIC_KEY"
-    touch "$AUTHORIZED_KEYS"
-    chmod 600 "$AUTHORIZED_KEYS"
-    if grep -Fqx -- "$AUTHORIZED_KEY_ENTRY" "$AUTHORIZED_KEYS"; then
-        log "master public key is already authorized"
-    else
-        printf '%s\n' "$AUTHORIZED_KEY_ENTRY" >>"$AUTHORIZED_KEYS"
-        log "restricted master public key added to $AUTHORIZED_KEYS"
-    fi
+AUTHORIZED_KEY_ENTRY="restrict $MASTER_PUBLIC_KEY"
+touch "$AUTHORIZED_KEYS"
+chmod 600 "$AUTHORIZED_KEYS"
+if grep -Fqx -- "$AUTHORIZED_KEY_ENTRY" "$AUTHORIZED_KEYS"; then
+    log "master public key is already authorized"
 else
-    warn "master public key was not supplied; passwordless master SSH is not configured"
+    printf '%s\n' "$AUTHORIZED_KEY_ENTRY" >>"$AUTHORIZED_KEYS"
+    log "restricted master public key added to $AUTHORIZED_KEYS"
 fi
 
 if [[ ! -e "$WORKER_KEY" ]]; then
