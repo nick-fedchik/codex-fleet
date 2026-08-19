@@ -9,6 +9,9 @@ readonly CONFIG_FILE="$CONFIG_DIR/worker.env"
 readonly SSH_DIR="$HOME/.ssh"
 readonly AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
 readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_worker}"
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
+readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/config/master.pub}"
 
 usage() {
     cat <<EOF
@@ -18,9 +21,9 @@ Usage:
 MASTER_HOST is the master's DNS name or IP address. Run this script as the
 already-created worker user, not as root. The user must have sudo access.
 
-The script optionally asks for the master's one-line public SSH key and adds it
-to this user's authorized_keys. It can also be supplied through
-CODEX_FLEET_MASTER_PUBLIC_KEY for non-interactive use.
+The script reads the master's public SSH key from config/master.pub when run
+from a clone. It can also fetch the canonical key from GitHub, use
+CODEX_FLEET_MASTER_PUBLIC_KEY, or ask for the key interactively.
 EOF
 }
 
@@ -69,7 +72,7 @@ command -v dpkg >/dev/null 2>&1 || die "dpkg is required"
 dpkg --compare-versions "${VERSION_ID:-0}" ge "$MIN_UBUNTU_VERSION" || \
     die "Ubuntu $MIN_UBUNTU_VERSION or newer is required (found ${VERSION_ID:-unknown})"
 
-for command_name in apt curl getent ssh-keygen sudo systemctl; do
+for command_name in apt-get getent sudo systemctl; do
     command -v "$command_name" >/dev/null 2>&1 || die "required command not found: $command_name"
 done
 
@@ -116,6 +119,13 @@ mkdir -p "$SSH_DIR" "$CONFIG_DIR"
 chmod 700 "$SSH_DIR" "$CONFIG_DIR"
 
 MASTER_PUBLIC_KEY=${CODEX_FLEET_MASTER_PUBLIC_KEY:-}
+if [[ -z "$MASTER_PUBLIC_KEY" && -f "$REPO_MASTER_KEY_FILE" ]]; then
+    MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' "$REPO_MASTER_KEY_FILE") || \
+        die "invalid master public key file: $REPO_MASTER_KEY_FILE"
+fi
+if [[ -z "$MASTER_PUBLIC_KEY" ]]; then
+    MASTER_PUBLIC_KEY=$(curl --silent --fail --show-error --max-time 10 "$MASTER_KEY_URL" 2>/dev/null || true)
+fi
 if [[ -z "$MASTER_PUBLIC_KEY" && -t 0 ]]; then
     printf '%s\n' 'Paste the master public SSH key (press Enter to skip):'
     IFS= read -r MASTER_PUBLIC_KEY

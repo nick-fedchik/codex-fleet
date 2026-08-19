@@ -15,9 +15,12 @@
 
 1. посилання на цей документ;
 2. hostname або IP master для аргументу `MASTER_HOST`;
-3. один рядок master public SSH key через приватний канал.
+3. для стандартного репозиторію більше нічого: public key master уже лежить у
+   `config/master.pub` і є доступним скрипту.
 
-Не передавати пароль worker-користувача, приватний SSH-ключ або файли master.
+Для fork, offline-режиму або іншого master public key передається окремо одним
+рядком через погоджений канал. Не передавати пароль worker-користувача,
+приватний SSH-ключ або файли master.
 Окремий worker-користувач має бути створений заздалегідь і повинен мати
 локальний `sudo`.
 
@@ -36,6 +39,10 @@ chmod 0755 install-ubuntu-worker.sh
 ```bash
 ./scripts/install-ubuntu-worker.sh MASTER_HOST
 ```
+
+У режимі без клонування installer завантажує canonical public key із GitHub.
+Для іншого ключа можна перед запуском задати `CODEX_FLEET_MASTER_KEY_URL` або
+`CODEX_FLEET_MASTER_PUBLIC_KEY`.
 
 Передбачається, що користувач має локальний доступ до ноутбука, права `sudo`,
 підключення до тієї самої локальної мережі, що й master, і може виконувати команди
@@ -87,8 +94,10 @@ ollama list
 outbound onboarding.
 
 Installer створює worker-ключ для майбутнього outbound-agent. Для поточного
-напрямку `master -> SSH -> worker` потрібен інший ключ: його створюють на master,
-а worker отримує лише публічну `.pub`-частину.
+напрямку `master -> SSH -> worker` використовується canonical public key із
+`config/master.pub`. Його приватна відповідна частина залишається тільки на
+master. Для custom/offline-режиму installer приймає public key через змінну або
+інтерактивний prompt.
 
 ## 1. Підготувати worker
 

@@ -102,8 +102,10 @@ creates a worker key, and writes `~/.config/codex-fleet/worker.env`. It does not
 create a user, download an unspecified model, or change the master's SSH keys.
 During an interactive run it can add the master's one-line public key to the
 current user's `authorized_keys`.
-For the current inbound SSH transport, generate the access key on the master and
-copy only its `.pub` file to the worker's `authorized_keys`; see the
+For the current inbound SSH transport, the canonical public key is stored in
+[`config/master.pub`](config/master.pub); its private counterpart stays only on
+the master. Custom or offline deployments can provide a different key through
+`CODEX_FLEET_MASTER_KEY_URL` or `CODEX_FLEET_MASTER_PUBLIC_KEY`. See the
 [Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md).
 
 If the master is shared by multiple people or services, run `codex-fleet` under
