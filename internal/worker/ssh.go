@@ -42,6 +42,18 @@ type Inspection struct {
 	OllamaEndpoint string        `json:"ollama_endpoint"`
 }
 
+type GenerationResult struct {
+	Response           string        `json:"response"`
+	Thinking           string        `json:"thinking,omitempty"`
+	Done               bool          `json:"done"`
+	TotalDuration      time.Duration `json:"total_duration"`
+	LoadDuration       time.Duration `json:"load_duration"`
+	PromptEvalCount    int           `json:"prompt_eval_count"`
+	PromptEvalDuration time.Duration `json:"prompt_eval_duration"`
+	EvalCount          int           `json:"eval_count"`
+	EvalDuration       time.Duration `json:"eval_duration"`
+}
+
 type Transport struct {
 	Timeout time.Duration
 }
@@ -54,32 +66,44 @@ func (t Transport) Inspect(ctx context.Context, worker config.Worker) (Inspectio
 	return t.inspect(ctx, worker)
 }
 
-func (t Transport) Run(ctx context.Context, worker config.Worker, model, prompt string) (string, error) {
+func (t Transport) Run(ctx context.Context, worker config.Worker, model, prompt, keepAlive string) (GenerationResult, error) {
+	return t.generate(ctx, worker, model, prompt, keepAlive)
+}
+
+func (t Transport) Warmup(ctx context.Context, worker config.Worker, model, keepAlive string) (GenerationResult, error) {
+	return t.generate(ctx, worker, model, "", keepAlive)
+}
+
+func (t Transport) generate(ctx context.Context, worker config.Worker, model, prompt, keepAlive string) (GenerationResult, error) {
 	payload, err := json.Marshal(struct {
-		Model  string `json:"model"`
-		Prompt string `json:"prompt"`
-		Stream bool   `json:"stream"`
-	}{Model: model, Prompt: prompt, Stream: false})
+		Model     string `json:"model"`
+		Prompt    string `json:"prompt"`
+		Stream    bool   `json:"stream"`
+		KeepAlive string `json:"keep_alive,omitempty"`
+	}{Model: model, Prompt: prompt, Stream: false, KeepAlive: keepAlive})
 	if err != nil {
-		return "", fmt.Errorf("encode prompt: %w", err)
+		return GenerationResult{}, fmt.Errorf("encode prompt: %w", err)
 	}
 	encoded := base64.StdEncoding.EncodeToString(payload)
 	remote := fmt.Sprintf("printf '%%s' '%s' | base64 -d | curl -fsS --max-time 600 -H 'Content-Type: application/json' -d @- http://127.0.0.1:11434/api/generate", encoded)
 	output, err := t.run(ctx, worker, remote, nil)
 	if err != nil {
-		return "", err
+		return GenerationResult{}, err
 	}
-	var response struct {
-		Response string `json:"response"`
-		Error    string `json:"error"`
+	var response GenerationResult
+	var apiError struct {
+		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(output, &response); err != nil {
-		return "", fmt.Errorf("parse Ollama response: %w", err)
+		return GenerationResult{}, fmt.Errorf("parse Ollama response: %w", err)
 	}
-	if response.Error != "" {
-		return "", fmt.Errorf("Ollama: %s", response.Error)
+	if err := json.Unmarshal(output, &apiError); err != nil {
+		return GenerationResult{}, fmt.Errorf("parse Ollama error response: %w", err)
 	}
-	return response.Response, nil
+	if apiError.Error != "" {
+		return GenerationResult{}, fmt.Errorf("Ollama: %s", apiError.Error)
+	}
+	return response, nil
 }
 
 func (t Transport) inspect(ctx context.Context, worker config.Worker) (Inspection, error) {

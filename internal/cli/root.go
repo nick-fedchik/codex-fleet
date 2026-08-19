@@ -84,6 +84,7 @@ func newWorkerCommand(opts *options, output, diagnostics io.Writer) *cobra.Comma
 	workers.AddCommand(newWorkerListCommand(opts, output))
 	workers.AddCommand(newWorkerCheckCommand(opts, output, diagnostics))
 	workers.AddCommand(newWorkerInspectCommand(opts, output, diagnostics))
+	workers.AddCommand(newWorkerWarmupCommand(opts, output, diagnostics))
 	workers.AddCommand(newWorkerRunCommand(opts, output, diagnostics))
 	workers.AddCommand(newWorkerRemoveCommand(opts, output))
 	return workers
@@ -196,7 +197,8 @@ func newWorkerInspectCommand(opts *options, output, diagnostics io.Writer) *cobr
 }
 
 func newWorkerRunCommand(opts *options, output, diagnostics io.Writer) *cobra.Command {
-	var model, prompt string
+	var model, prompt, keepAlive, format string
+	var timeout time.Duration
 	command := &cobra.Command{
 		Use:   "run NAME",
 		Short: "Run one explicit prompt on a worker",
@@ -216,17 +218,76 @@ func newWorkerRunCommand(opts *options, output, diagnostics io.Writer) *cobra.Co
 			if err != nil {
 				return &exitError{code: 3, err: err}
 			}
-			result, err := (worker.Transport{Timeout: 10 * time.Minute}).Run(cmd.Context(), *selected, model, prompt)
+			result, err := (worker.Transport{Timeout: timeout}).Run(cmd.Context(), *selected, model, prompt, keepAlive)
 			if err != nil {
 				_, _ = fmt.Fprintln(diagnostics, err)
 				return &exitError{code: 13, err: errors.New("remote job failed")}
 			}
-			_, err = fmt.Fprintln(output, result)
+			if format == "json" {
+				return writeJSON(output, struct {
+					Worker string                  `json:"worker"`
+					Model  string                  `json:"model"`
+					Result worker.GenerationResult `json:"result"`
+				}{Worker: selected.Name, Model: model, Result: result})
+			}
+			if format != "text" {
+				return fmt.Errorf("unsupported format %q: use text or json", format)
+			}
+			_, err = fmt.Fprintln(output, result.Response)
 			return err
 		},
 	}
 	command.Flags().StringVar(&model, "model", "", "Ollama model name")
 	command.Flags().StringVar(&prompt, "prompt", "", "prompt text")
+	command.Flags().StringVar(&keepAlive, "keep-alive", "10m", "how long Ollama keeps the model loaded")
+	command.Flags().StringVar(&format, "format", "text", "output format: text or json")
+	command.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "maximum time to wait for SSH and Ollama")
+	return command
+}
+
+func newWorkerWarmupCommand(opts *options, output, diagnostics io.Writer) *cobra.Command {
+	var model, keepAlive, format string
+	var timeout time.Duration
+	command := &cobra.Command{
+		Use:   "warmup NAME",
+		Short: "Load a model and measure its loading time without a prompt",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if model == "" {
+				return fmt.Errorf("--model is required")
+			}
+			registry, err := loadRegistry(opts)
+			if err != nil {
+				return err
+			}
+			selected, err := registry.Find(args[0])
+			if err != nil {
+				return &exitError{code: 3, err: err}
+			}
+			result, err := (worker.Transport{Timeout: timeout}).Warmup(cmd.Context(), *selected, model, keepAlive)
+			if err != nil {
+				_, _ = fmt.Fprintln(diagnostics, err)
+				return &exitError{code: 13, err: errors.New("worker warmup failed")}
+			}
+			if format == "json" {
+				return writeJSON(output, struct {
+					Worker    string                  `json:"worker"`
+					Model     string                  `json:"model"`
+					KeepAlive string                  `json:"keep_alive"`
+					Result    worker.GenerationResult `json:"result"`
+				}{Worker: selected.Name, Model: model, KeepAlive: keepAlive, Result: result})
+			}
+			if format != "table" {
+				return fmt.Errorf("unsupported format %q: use table or json", format)
+			}
+			_, err = fmt.Fprintf(output, "warmed worker=%s model=%s keep_alive=%s load=%s total=%s\n", selected.Name, model, keepAlive, result.LoadDuration.Round(time.Millisecond), result.TotalDuration.Round(time.Millisecond))
+			return err
+		},
+	}
+	command.Flags().StringVar(&model, "model", "", "Ollama model name")
+	command.Flags().StringVar(&keepAlive, "keep-alive", "10m", "how long Ollama keeps the model loaded")
+	command.Flags().StringVar(&format, "format", "table", "output format: table or json")
+	command.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "maximum time to wait for SSH and Ollama")
 	return command
 }
 

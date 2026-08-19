@@ -17,6 +17,7 @@ codex-fleet
   worker list            List registered workers and last known state
   worker check NAME      Perform a live availability check
   worker inspect NAME    Fetch live identity, models, and runtime details
+  worker warmup NAME     Load one model and measure loading time
   worker run NAME        Run one prompt on a selected worker
   worker remove NAME     Remove a worker from the local registry
   config path            Print the active configuration path
@@ -33,9 +34,12 @@ codex-fleet worker add jetson \
 codex-fleet worker list
 codex-fleet worker check jetson
 codex-fleet worker inspect jetson
+codex-fleet worker warmup jetson --model qwen3.5:35b-a3b
 codex-fleet worker run jetson \
   --model qwen3.5:35b-a3b \
-  --prompt "Summarize the current worker status."
+  --prompt "Summarize the current worker status." \
+  --keep-alive 10m \
+  --timeout 10m
 ```
 
 The exact flags may evolve, but the distinction between registry, live check,
@@ -91,6 +95,16 @@ Fetches a detailed live report without running a model job:
 Runs one explicit prompt on one named worker and returns the result. It must
 require the worker name and model explicitly in the initial MVP. Streaming,
 parallel fan-out, retries, and scheduler-selected workers are later features.
+The command keeps the selected model loaded for the configured `--keep-alive`
+duration and supports `--format json` with Ollama load and generation metrics.
+
+### `worker warmup`
+
+Explicitly loads one model without running a user prompt. It returns the model
+load duration and total request duration, making cold starts measurable. The
+model remains loaded for `--keep-alive` unless Ollama is configured otherwise.
+Both warmup and run have an explicit `--timeout` so a powered-off host or a
+model that cannot load does not wait indefinitely.
 
 ## Output and exit status
 
