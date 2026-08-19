@@ -11,6 +11,15 @@ The worker should be distributed as one standalone executable:
 
 The executable runs in the user's session, without an installer, administrator privileges, system service, Docker, Python, Node.js, or WSL.
 
+## Platform scope
+
+Windows 11 is the minimum supported Windows version. Windows versions older than
+Windows 11 are out of scope: in practice they usually indicate older hardware,
+and installing Linux is the recommended worker path for such machines.
+
+macOS is not a current priority. A macOS worker can be added later if there is a
+concrete use case and enough demand to justify a native integration.
+
 ## Recommended Windows path
 
 The Windows worker makes an outbound connection to the master host. The master does not need to open an inbound service on the Windows laptop.
@@ -141,6 +150,8 @@ Repository access, file transfer, Git worktrees, patches, and controlled shell e
 | Linux | SSH alias or outbound agent | No | Ollama prompt worker |
 | Windows 11 | Outbound standalone agent | No | Ollama prompt worker |
 | Windows 11 + WSL2 | SSH to dedicated WSL2 Linux user, or outbound agent | Initial setup usually yes | Linux-compatible Ollama prompt worker |
+| Windows older than 11 | Not supported | — | Install Linux where hardware permits |
+| macOS | Not currently supported | — | Future, demand-driven |
 | Linux Live | Manual fallback | Boot/setup dependent | Recovery/temporary worker |
 
 ## Consequence
