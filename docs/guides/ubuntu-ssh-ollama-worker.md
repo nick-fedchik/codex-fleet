@@ -80,7 +80,8 @@ chmod 0755 install-ubuntu-worker.sh
 поточний login, використовує його домашній каталог, створює SSH-ключ worker і
 записує `~/.config/codex-fleet/worker.env`. Він перевіряє Ubuntu 24.04+, ставить
 `openssh-server`, `openssh-client`, `curl`, сертифікати й Ollama, а також вмикає
-відповідні systemd-сервіси.
+відповідні systemd-сервіси. Ollama працює як системний `ollama.service`, тому
+не залежить від login-сесії worker-користувача і запускається після reboot.
 
 Модель навмисно не завантажується автоматично. Після інсталятора виконайте:
 
@@ -88,6 +89,18 @@ chmod 0755 install-ubuntu-worker.sh
 ollama pull MODEL_NAME
 ollama list
 ```
+
+Перевірити автозапуск і стан сервісу:
+
+```bash
+systemctl is-enabled ollama
+systemctl is-active ollama
+sudo systemctl status ollama --no-pager
+```
+
+Після reboot Ollama буде запущена, але модель може бути ще не завантажена в
+RAM/VRAM. Це нормально: перший `worker run` завантажить її, або master може
+заздалегідь виконати `worker warmup`.
 
 Поточний SSH fallback все ще потребує, щоб master operator знав адресу worker і
 додав його до реєстру. `MASTER_HOST` зберігається в конфігурації для наступного

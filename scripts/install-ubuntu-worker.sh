@@ -107,12 +107,14 @@ command -v ollama >/dev/null 2>&1 || die "Ollama installation did not provide th
 log "enabling SSH server"
 sudo systemctl enable --now ssh
 
-if systemctl list-unit-files ollama.service >/dev/null 2>&1; then
-    log "enabling Ollama service"
-    sudo systemctl enable --now ollama
-else
-    warn "ollama.service was not found; start Ollama using the installation's documented method"
+if ! sudo systemctl cat ollama.service >/dev/null 2>&1; then
+    die "ollama.service was not created; follow the official systemd service instructions"
 fi
+
+log "enabling Ollama system service"
+sudo systemctl enable --now ollama
+sudo systemctl is-enabled --quiet ollama || die "ollama.service is not enabled"
+sudo systemctl is-active --quiet ollama || die "ollama.service is not active"
 
 umask 077
 mkdir -p "$SSH_DIR" "$CONFIG_DIR"
