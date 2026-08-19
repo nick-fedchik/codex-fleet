@@ -192,6 +192,20 @@ ssh worker-alias 'hostname; id -un; ollama list'
 Register and verify the worker:
 
 ```bash
+codex-fleet worker add WORKER_IP --check
+```
+
+The short form derives the worker name from the IP, uses the `codex-fleet` SSH
+user, and uses `~/.ssh/id_ed25519_codex_fleet`. Override only the SSH user when
+needed:
+
+```bash
+codex-fleet worker add WORKER_IP --user WORKER_USER --check
+```
+
+The explicit form remains available for aliases and custom identities:
+
+```bash
 codex-fleet worker add WORKER_NAME \
   --ssh-host worker-alias \
   --check

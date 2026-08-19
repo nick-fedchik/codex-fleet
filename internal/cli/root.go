@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -95,12 +96,23 @@ func newWorkerAddCommand(opts *options, output, diagnostics io.Writer) *cobra.Co
 	var port int
 	var verify bool
 	command := &cobra.Command{
-		Use:   "add NAME",
+		Use:   "add HOST | add NAME --ssh-host HOST",
 		Short: "Register or update a worker",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
 			if strings.TrimSpace(sshHost) == "" {
-				return fmt.Errorf("--ssh-host is required")
+				sshHost = args[0]
+				name = workerNameFromHost(sshHost)
+				if strings.TrimSpace(sshUser) == "" {
+					sshUser = "codex-fleet"
+				}
+				if strings.TrimSpace(identity) == "" {
+					identity = defaultWorkerIdentity()
+				}
+			}
+			if strings.TrimSpace(sshHost) == "" {
+				return fmt.Errorf("worker host is required")
 			}
 			path, err := registryPath(opts)
 			if err != nil {
@@ -110,23 +122,38 @@ func newWorkerAddCommand(opts *options, output, diagnostics io.Writer) *cobra.Co
 			if err != nil {
 				return err
 			}
-			registry.Upsert(config.Worker{Name: args[0], SSHHost: sshHost, SSHUser: sshUser, Port: port, IdentityFile: identity})
+			registry.Upsert(config.Worker{Name: name, SSHHost: sshHost, SSHUser: sshUser, Port: port, IdentityFile: identity})
 			if err := config.Save(path, registry); err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(output, "registered worker %s\n", args[0])
+			_, err = fmt.Fprintf(output, "registered worker %s\n", name)
 			if err != nil || !verify {
 				return err
 			}
-			return inspectWorker(cmd.Context(), opts, output, diagnostics, args[0], "table", false)
+			return inspectWorker(cmd.Context(), opts, output, diagnostics, name, "table", false)
 		},
 	}
 	command.Flags().StringVar(&sshHost, "ssh-host", "", "SSH host or existing SSH alias")
-	command.Flags().StringVar(&sshUser, "ssh-user", "", "optional SSH user override")
+	command.Flags().StringVar(&sshUser, "ssh-user", "", "SSH user (default: codex-fleet in shorthand form)")
+	command.Flags().StringVar(&sshUser, "user", "", "alias for --ssh-user")
 	command.Flags().IntVar(&port, "port", 0, "optional SSH port")
-	command.Flags().StringVar(&identity, "identity", "", "optional SSH identity file")
+	command.Flags().StringVar(&identity, "identity", "", "SSH identity file (default: ~/.ssh/id_ed25519_codex_fleet in shorthand form)")
 	command.Flags().BoolVar(&verify, "check", false, "check the worker immediately after registration")
 	return command
+}
+
+func workerNameFromHost(host string) string {
+	name := strings.Trim(host, "[]")
+	name = strings.NewReplacer(".", "-", ":", "-", "/", "-").Replace(name)
+	return "worker-" + name
+}
+
+func defaultWorkerIdentity() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "~/.ssh/id_ed25519_codex_fleet"
+	}
+	return filepath.Join(home, ".ssh", "id_ed25519_codex_fleet")
 }
 
 func newWorkerListCommand(opts *options, output io.Writer) *cobra.Command {
