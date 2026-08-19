@@ -21,18 +21,32 @@
 Для fork, offline-режиму або іншого master public key передається окремо одним
 рядком через погоджений канал. Не передавати пароль worker-користувача,
 приватний SSH-ключ або файли master.
-Окремий worker-користувач має бути створений заздалегідь і повинен мати
-локальний `sudo`.
+Інсталятор може працювати у двох режимах: від уже створеного користувача з
+`sudo` або від адміністратора, який створить worker-користувача. За
+замовчуванням для root використовується ім'я `worker`; інше ім'я задається
+опцією `--worker-user`.
 
 Документ можна відкрити без клонування репозиторію. Скрипт завантажується
-окремо з GitHub і запускається від імені вже створеного worker-користувача:
+окремо з GitHub і запускається адміністратором. Якщо користувач не існує,
+інсталятор створить його, додасть до групи `sudo` і продовжить роботу від його
+імені:
 
 ```bash
 curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
 chmod 0755 install-ubuntu-worker.sh
-./install-ubuntu-worker.sh MASTER_HOST
+sudo ./install-ubuntu-worker.sh MASTER_HOST
 ```
+
+Для іншого імені worker-користувача:
+
+```bash
+sudo ./install-ubuntu-worker.sh --worker-user ai-worker MASTER_HOST
+```
+
+Якщо worker-користувач уже існує, інсталятор використає його та перевірить
+наявність доступу до `sudo`. Під час створення нового користувача Ubuntu
+запитає його пароль.
 
 Якщо репозиторій уже склоновано, замість завантаження можна запустити:
 
@@ -43,7 +57,7 @@ chmod 0755 install-ubuntu-worker.sh
 Перед реальною інсталяцією можна виконати перевірку без змін у системі:
 
 ```bash
-./scripts/install-ubuntu-worker.sh --dry-run MASTER_HOST
+sudo ./scripts/install-ubuntu-worker.sh --dry-run MASTER_HOST
 ```
 
 Повторний звичайний запуск безпечний для вже налаштованого worker: `apt` не

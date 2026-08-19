@@ -10,6 +10,7 @@ readonly SSH_DIR="$HOME/.ssh"
 readonly AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
 readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_worker}"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
 readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
 readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://github.com/nick-fedchik/codex-fleet/releases/latest/download/master.pub}"
 declare -a WARNINGS=()
@@ -26,10 +27,12 @@ trap on_error ERR
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME [--dry-run] MASTER_HOST
+  $SCRIPT_NAME [--dry-run] [--worker-user USER] MASTER_HOST
 
 MASTER_HOST is the master's DNS name or IP address. Run this script as the
-already-created worker user, not as root. The user must have sudo access.
+worker user. When run as root, the default worker username is "worker"; the
+script creates it when needed, grants it sudo access, and continues as that
+user. Use --worker-user to choose another username.
 
 The script reads the master's public SSH key from config/master.pub when run
 from a clone. It can also fetch the canonical key from GitHub, use
@@ -37,6 +40,10 @@ CODEX_FLEET_MASTER_PUBLIC_KEY, or ask for the key interactively.
 
 --dry-run checks the platform and reports planned actions without changing the
 system, writing keys, or writing the worker configuration.
+
+--worker-user USER selects the worker login. If the login does not exist and
+the script is run as root, it is created. When run as a non-root user, USER
+must match the current login.
 EOF
 }
 
@@ -55,28 +62,55 @@ log() {
 }
 
 DRY_RUN=0
-if [[ ${1:-} == "--dry-run" ]]; then
-    DRY_RUN=1
-    shift
-fi
+WORKER_USER_OPTION=""
+MASTER_HOST=""
+while (($# > 0)); do
+    case $1 in
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        --worker-user)
+            (($# >= 2)) || die "--worker-user requires a username"
+            WORKER_USER_OPTION=$2
+            shift 2
+            ;;
+        --worker-user=*)
+            WORKER_USER_OPTION=${1#*=}
+            [[ -n "$WORKER_USER_OPTION" ]] || die "--worker-user requires a username"
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            die "unknown option: $1"
+            ;;
+        *)
+            [[ -z "$MASTER_HOST" ]] || die "MASTER_HOST was specified more than once"
+            MASTER_HOST=$1
+            shift
+            ;;
+    esac
+done
 
-if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
-    usage
-    exit 0
-fi
-
-if [[ $# -ne 1 ]]; then
-    usage >&2
-    exit 2
-fi
-
-MASTER_HOST=$1
+[[ -n "$MASTER_HOST" ]] || { usage >&2; exit 2; }
 
 if [[ $EUID -eq 0 ]]; then
-    die "run as the pre-created worker user, not as root"
+    WORKER_USER=${WORKER_USER_OPTION:-worker}
+else
+    WORKER_USER=$(id -un)
+    if [[ -n "$WORKER_USER_OPTION" && "$WORKER_USER_OPTION" != "$WORKER_USER" ]]; then
+        die "--worker-user must match the current login when not run as root (current: $WORKER_USER)"
+    fi
 fi
 
-if [[ $MASTER_HOST == *$'\n'* || $MASTER_HOST == *$'\r'* || $MASTER_HOST == *[[:space:]]* ]]; then
+[[ $WORKER_USER =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || \
+    die "invalid worker username: $WORKER_USER"
+[[ $WORKER_USER != root ]] || die "root cannot be used as the worker user"
+
+if [[ $MASTER_HOST == -* || $MASTER_HOST == *$'\n'* || $MASTER_HOST == *$'\r'* || $MASTER_HOST == *[[:space:]]* ]]; then
     die "MASTER_HOST must be a single hostname or IP address"
 fi
 
@@ -96,7 +130,6 @@ for command_name in apt-get getent sudo systemctl; do
     command -v "$command_name" >/dev/null 2>&1 || die "required command not found: $command_name"
 done
 
-WORKER_USER=$(id -un)
 WORKER_HOSTNAME=$(hostname)
 
 log "worker user: $WORKER_USER"
@@ -105,6 +138,51 @@ log "master host: $MASTER_HOST"
 
 if ! getent ahosts "$MASTER_HOST" >/dev/null 2>&1; then
     warn "MASTER_HOST does not currently resolve; saving it for later use"
+fi
+
+if [[ $EUID -eq 0 ]]; then
+    command -v adduser >/dev/null 2>&1 || die "required command not found: adduser"
+    command -v usermod >/dev/null 2>&1 || die "required command not found: usermod"
+
+    if getent passwd "$WORKER_USER" >/dev/null 2>&1; then
+        WORKER_HOME=$(getent passwd "$WORKER_USER" | cut -d: -f6)
+        [[ -n "$WORKER_HOME" && -d "$WORKER_HOME" ]] || \
+            die "worker user $WORKER_USER has no usable home directory"
+        log "worker user already exists: $WORKER_USER"
+    else
+        if ((DRY_RUN == 1)); then
+            log "DRY RUN: would create worker user: $WORKER_USER"
+            log "DRY RUN: would add $WORKER_USER to the sudo group"
+            log "DRY RUN: would install/update apt dependencies, SSH, and Ollama"
+            exit 0
+        fi
+        log "creating worker user: $WORKER_USER"
+        adduser --gecos "" "$WORKER_USER"
+        WORKER_HOME=$(getent passwd "$WORKER_USER" | cut -d: -f6)
+    fi
+
+    worker_groups=$(id -nG "$WORKER_USER")
+    if [[ " $worker_groups " != *" sudo "* ]]; then
+        if ((DRY_RUN == 1)); then
+            log "DRY RUN: would add $WORKER_USER to the sudo group"
+        else
+            log "granting sudo access to $WORKER_USER"
+            usermod -aG sudo "$WORKER_USER"
+        fi
+    else
+        log "worker user has sudo access: $WORKER_USER"
+    fi
+
+    if ((DRY_RUN == 1)); then
+        log "DRY RUN: no changes will be made"
+        [[ -r "$SCRIPT_PATH" ]] || die "worker user cannot read installer at $SCRIPT_PATH; move it to a shared directory"
+        log "DRY RUN: checking the remaining installation as $WORKER_USER"
+        exec sudo -iu "$WORKER_USER" -- "$SCRIPT_PATH" --dry-run --worker-user "$WORKER_USER" "$MASTER_HOST"
+    fi
+
+    [[ -r "$SCRIPT_PATH" ]] || die "worker user cannot read installer at $SCRIPT_PATH; move it to a shared directory"
+    log "continuing installation as $WORKER_USER"
+    exec sudo -iu "$WORKER_USER" -- "$SCRIPT_PATH" --worker-user "$WORKER_USER" "$MASTER_HOST"
 fi
 
 if ((DRY_RUN == 1)); then
