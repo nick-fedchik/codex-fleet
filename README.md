@@ -86,6 +86,21 @@ The worker does not need Go, Git, Cobra, Codex, NATS, or this source tree. Follo
 the [Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md) or the
 [Windows 11 + WSL2 guide](docs/guides/wsl2-ssh-worker.md).
 
+For Ubuntu, the repository includes a dependency installer for a worker whose
+dedicated login already exists. Run it as that user and pass only the master's
+hostname or IP address:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/scripts/install-ubuntu-worker.sh \
+  -o install-ubuntu-worker.sh
+chmod 0755 install-ubuntu-worker.sh
+./install-ubuntu-worker.sh MASTER_HOST
+```
+
+The script checks Ubuntu 24.04+, installs SSH and Ollama, enables their services,
+creates a worker key, and writes `~/.config/codex-fleet/worker.env`. It does not
+create a user, download an unspecified model, or change the master's SSH keys.
+
 ## Build from source
 
 Clone the repository and enter its directory:

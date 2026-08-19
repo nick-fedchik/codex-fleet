@@ -19,14 +19,44 @@
 Позначення:
 
 - `WORKER_IP` — IP-адреса нового ноутбука в локальній мережі;
-- `MASTER_IP` — IP-адреса master;
+- `MASTER_HOST` — hostname або IP-адреса master для автоматичного інсталятора;
+- `MASTER_IP` — IP-адреса master, лише якщо потрібно обмежити UFW;
 - `WORKER_USER` — окремий Linux-користувач для SSH-доступу;
 - `WORKER_ALIAS` — локальний SSH-аліас на master;
 - `MODEL_NAME` — модель Ollama, яку потрібно завантажити.
 
 Поля у верхньому регістрі потрібно замінити власними значеннями; самі назви
-`WORKER_IP`, `MASTER_IP`, `WORKER_USER`, `WORKER_ALIAS`, `WORKER_HOSTNAME` і
+`WORKER_IP`, `MASTER_HOST`, `MASTER_IP`, `WORKER_USER`, `WORKER_ALIAS`, `WORKER_HOSTNAME` і
 `MODEL_NAME` вводити не потрібно.
+
+## Автоматичний інсталятор
+
+Якщо окремий worker-користувач уже створений і має `sudo`, інсталятор можна
+завантажити без Git і запустити від імені цього користувача:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nick-fedchik/codex-fleet/main/scripts/install-ubuntu-worker.sh \
+  -o install-ubuntu-worker.sh
+chmod 0755 install-ubuntu-worker.sh
+./install-ubuntu-worker.sh MASTER_HOST
+```
+
+Інсталятор не запускайте через `sudo` і не запускайте від `root`: він визначає
+поточний login, використовує його домашній каталог, створює SSH-ключ worker і
+записує `~/.config/codex-fleet/worker.env`. Він перевіряє Ubuntu 24.04+, ставить
+`openssh-server`, `openssh-client`, `curl`, сертифікати й Ollama, а також вмикає
+відповідні systemd-сервіси.
+
+Модель навмисно не завантажується автоматично. Після інсталятора виконайте:
+
+```bash
+ollama pull MODEL_NAME
+ollama list
+```
+
+Поточний SSH fallback все ще потребує, щоб master operator знав адресу worker і
+додав його до реєстру. `MASTER_HOST` зберігається в конфігурації для наступного
+outbound onboarding.
 
 ## 1. Підготувати worker
 

@@ -17,7 +17,7 @@ Status values:
 | CF-003 | Live worker availability check | done | bounded SSH + Ollama check returns a stable exit status on a registered Linux worker |
 | CF-004 | Worker inspection | done | hostname, user, Ollama models and runtime state are readable on a registered worker |
 | CF-005 | Single prompt execution | done | explicit model/prompt returns a known response from a registered Ollama worker |
-| CF-006 | Native Ubuntu onboarding | done | public step-by-step SSH/Ollama guide exists |
+| CF-006 | Native Ubuntu onboarding | done | public SSH/Ollama guide and one-argument Ubuntu worker installer exist |
 | CF-007 | Windows 11 native worker | open | standalone agent runs without WSL or admin privileges |
 | CF-008 | Windows 11 + WSL2 worker | done | public WSL2 + dedicated-user SSH guide exists |
 | CF-009 | Dynamic worker registration | open | worker bootstrap requires only master hostname/IP, then outbound agent registers and sends heartbeats |
