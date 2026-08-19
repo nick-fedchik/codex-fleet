@@ -80,7 +80,7 @@ func newConfigCommand(opts *options, output io.Writer) *cobra.Command {
 
 func newWorkerCommand(opts *options, output, diagnostics io.Writer) *cobra.Command {
 	workers := &cobra.Command{Use: "worker", Short: "Register and operate Ollama workers", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() }}
-	workers.AddCommand(newWorkerAddCommand(opts, output))
+	workers.AddCommand(newWorkerAddCommand(opts, output, diagnostics))
 	workers.AddCommand(newWorkerListCommand(opts, output))
 	workers.AddCommand(newWorkerCheckCommand(opts, output, diagnostics))
 	workers.AddCommand(newWorkerInspectCommand(opts, output, diagnostics))
@@ -90,14 +90,15 @@ func newWorkerCommand(opts *options, output, diagnostics io.Writer) *cobra.Comma
 	return workers
 }
 
-func newWorkerAddCommand(opts *options, output io.Writer) *cobra.Command {
+func newWorkerAddCommand(opts *options, output, diagnostics io.Writer) *cobra.Command {
 	var sshHost, sshUser, identity string
 	var port int
+	var verify bool
 	command := &cobra.Command{
 		Use:   "add NAME",
 		Short: "Register or update a worker",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(sshHost) == "" {
 				return fmt.Errorf("--ssh-host is required")
 			}
@@ -114,13 +115,17 @@ func newWorkerAddCommand(opts *options, output io.Writer) *cobra.Command {
 				return err
 			}
 			_, err = fmt.Fprintf(output, "registered worker %s\n", args[0])
-			return err
+			if err != nil || !verify {
+				return err
+			}
+			return inspectWorker(cmd.Context(), opts, output, diagnostics, args[0], "table", false)
 		},
 	}
 	command.Flags().StringVar(&sshHost, "ssh-host", "", "SSH host or existing SSH alias")
 	command.Flags().StringVar(&sshUser, "ssh-user", "", "optional SSH user override")
 	command.Flags().IntVar(&port, "port", 0, "optional SSH port")
 	command.Flags().StringVar(&identity, "identity", "", "optional SSH identity file")
+	command.Flags().BoolVar(&verify, "check", false, "check the worker immediately after registration")
 	return command
 }
 
@@ -170,16 +175,97 @@ func newWorkerListCommand(opts *options, output io.Writer) *cobra.Command {
 
 func newWorkerCheckCommand(opts *options, output, diagnostics io.Writer) *cobra.Command {
 	var format string
+	var all bool
 	command := &cobra.Command{
-		Use:   "check NAME",
+		Use:   "check [NAME]",
 		Short: "Check whether a worker and Ollama are reachable",
-		Args:  cobra.ExactArgs(1),
+		Args: func(_ *cobra.Command, args []string) error {
+			if all && len(args) != 0 {
+				return fmt.Errorf("--all cannot be combined with a worker name")
+			}
+			if !all && len(args) != 1 {
+				return fmt.Errorf("provide NAME or use --all")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if all {
+				return checkAllWorkers(cmd.Context(), opts, output, diagnostics, format)
+			}
 			return inspectWorker(cmd.Context(), opts, output, diagnostics, args[0], format, false)
 		},
 	}
 	command.Flags().StringVar(&format, "format", "table", "output format: table or json")
+	command.Flags().BoolVar(&all, "all", false, "check every registered worker")
 	return command
+}
+
+type workerCheckResult struct {
+	Name     string `json:"name"`
+	State    string `json:"state"`
+	Hostname string `json:"hostname,omitempty"`
+	Models   int    `json:"models,omitempty"`
+	Running  int    `json:"running,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+func checkAllWorkers(ctx context.Context, opts *options, output, diagnostics io.Writer, format string) error {
+	registry, err := loadRegistry(opts)
+	if err != nil {
+		return err
+	}
+	if format != "table" && format != "json" {
+		return fmt.Errorf("unsupported format %q: use table or json", format)
+	}
+	results := make([]workerCheckResult, 0, len(registry.Workers))
+	anyOffline := false
+	for i := range registry.Workers {
+		selected := &registry.Workers[i]
+		inspection, checkErr := (worker.Transport{Timeout: 15 * time.Second}).Inspect(ctx, *selected)
+		checkedAt := time.Now().UTC()
+		selected.LastCheckedAt = &checkedAt
+		result := workerCheckResult{Name: selected.Name}
+		if checkErr != nil {
+			selected.LastState = "offline"
+			selected.LastError = checkErr.Error()
+			result.State = "offline"
+			result.Error = checkErr.Error()
+			anyOffline = true
+			_, _ = fmt.Fprintf(diagnostics, "%s: %s\n", selected.Name, checkErr)
+		} else {
+			selected.LastState = "online"
+			selected.LastError = ""
+			result.State = "online"
+			result.Hostname = inspection.Hostname
+			result.Models = len(inspection.Models)
+			result.Running = len(inspection.Running)
+		}
+		results = append(results, result)
+	}
+	if path, pathErr := registryPath(opts); pathErr == nil {
+		if saveErr := config.Save(path, registry); saveErr != nil {
+			return saveErr
+		}
+	}
+	if format == "json" {
+		if err := writeJSON(output, results); err != nil {
+			return err
+		}
+	} else {
+		for _, result := range results {
+			if result.State == "online" {
+				if _, err := fmt.Fprintf(output, "online %s host=%s models=%d running=%d\n", result.Name, result.Hostname, result.Models, result.Running); err != nil {
+					return err
+				}
+			} else if _, err := fmt.Fprintf(output, "offline %s error=%s\n", result.Name, result.Error); err != nil {
+				return err
+			}
+		}
+	}
+	if anyOffline {
+		return &exitError{code: 10, err: errors.New("one or more workers unavailable")}
+	}
+	return nil
 }
 
 func newWorkerInspectCommand(opts *options, output, diagnostics io.Writer) *cobra.Command {

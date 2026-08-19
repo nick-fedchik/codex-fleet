@@ -16,6 +16,7 @@ codex-fleet
   worker add NAME       Register a worker locally
   worker list            List registered workers and last known state
   worker check NAME      Perform a live availability check
+  worker check --all     Check every registered worker
   worker inspect NAME    Fetch live identity, models, and runtime details
   worker warmup NAME     Load one model and measure loading time
   worker run NAME        Run one prompt on a selected worker
@@ -29,10 +30,11 @@ Initial examples:
 ```bash
 codex-fleet worker add jetson \
   --ssh-host jetson-codex \
-  --name Jetson-AGX-64G
+  --check
 
 codex-fleet worker list
 codex-fleet worker check jetson
+codex-fleet worker check --all --format json
 codex-fleet worker inspect jetson
 codex-fleet worker warmup jetson --model qwen3.5:35b-a3b
 codex-fleet worker run jetson \
@@ -76,7 +78,9 @@ Performs a bounded live check:
 4. return a clear success or failure status.
 
 The command must have a timeout and must never wait indefinitely for a powered-off
-or disconnected host.
+or disconnected host. `worker check --all` checks registered workers serially,
+updates their last-known state, reports every result, and exits with status `10`
+if at least one worker is unavailable.
 
 ### `worker inspect`
 
