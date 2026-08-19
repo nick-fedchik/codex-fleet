@@ -11,6 +11,7 @@ readonly AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
 readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_worker}"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
+readonly LOCAL_MASTER_KEY_FILE="$SCRIPT_DIR/master.pub"
 readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
 readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://github.com/nick-fedchik/codex-fleet/releases/latest/download/master.pub}"
 declare -a WARNINGS=()
@@ -242,6 +243,10 @@ mkdir -p "$SSH_DIR" "$CONFIG_DIR"
 chmod 700 "$SSH_DIR" "$CONFIG_DIR"
 
 MASTER_PUBLIC_KEY=${CODEX_FLEET_MASTER_PUBLIC_KEY:-}
+if [[ -z "$MASTER_PUBLIC_KEY" && -f "$LOCAL_MASTER_KEY_FILE" ]]; then
+    MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' "$LOCAL_MASTER_KEY_FILE") || \
+        die "invalid master public key file: $LOCAL_MASTER_KEY_FILE"
+fi
 if [[ -z "$MASTER_PUBLIC_KEY" && -f "$REPO_MASTER_KEY_FILE" ]]; then
     MASTER_PUBLIC_KEY=$(awk 'NF { if (++n > 1) exit 2; print } END { if (n != 1) exit 2 }' "$REPO_MASTER_KEY_FILE") || \
         die "invalid master public key file: $REPO_MASTER_KEY_FILE"

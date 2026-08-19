@@ -34,6 +34,8 @@
 ```bash
 curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
+curl -fsSL https://github.com/nick-fedchyk/codex-fleet/releases/latest/download/master.pub \
+  -o master.pub
 chmod 0755 install-ubuntu-worker.sh
 sudo ./install-ubuntu-worker.sh MASTER_HOST
 ```
@@ -47,6 +49,10 @@ sudo ./install-ubuntu-worker.sh --worker-user ai-worker MASTER_HOST
 Якщо worker-користувач уже існує, інсталятор використає його та перевірить
 наявність доступу до `sudo`. Під час створення нового користувача Ubuntu
 запитає його пароль.
+
+Файл `master.pub`, який лежить поруч із installer, буде використаний
+автоматично; якщо його немає, installer спробує завантажити canonical key із
+GitHub і лише після цього попросить вставити ключ вручну.
 
 Якщо репозиторій уже склоновано, замість завантаження можна запустити:
 
