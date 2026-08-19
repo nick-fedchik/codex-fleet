@@ -2,7 +2,12 @@
 
 Це публічна інструкція для власника нового ноутбука з базовою Ubuntu. Після
 виконання master зможе підключатися до нього через SSH під окремим користувачем
-`codex` і запускати Ollama-задачі.
+і запускати Ollama-задачі.
+
+Це інструкція для поточного SSH fallback. У ній worker owner налаштовує SSH на
+своєму ноутбуці, після чого master operator додає адресу worker до локального
+реєстру. Цільовий outbound onboarding, де worker owner вказує лише адресу master,
+є наступним етапом і ще не входить до поточного SSH MVP.
 
 Передбачається, що користувач має локальний доступ до ноутбука, права `sudo`,
 підключення до тієї самої локальної мережі, що й master, і може виконувати команди
@@ -15,10 +20,13 @@
 
 - `WORKER_IP` — IP-адреса нового ноутбука в локальній мережі;
 - `MASTER_IP` — IP-адреса master;
+- `WORKER_USER` — окремий Linux-користувач для SSH-доступу;
+- `WORKER_ALIAS` — локальний SSH-аліас на master;
 - `MODEL_NAME` — модель Ollama, яку потрібно завантажити.
 
 Поля у верхньому регістрі потрібно замінити власними значеннями; самі назви
-`WORKER_IP`, `MASTER_IP` і `MODEL_NAME` вводити не потрібно.
+`WORKER_IP`, `MASTER_IP`, `WORKER_USER`, `WORKER_ALIAS`, `WORKER_HOSTNAME` і
+`MODEL_NAME` вводити не потрібно.
 
 ## 1. Підготувати worker
 
@@ -29,11 +37,11 @@ sudo apt update
 sudo apt install -y openssh-server curl ca-certificates
 ```
 
-Створити окремого користувача для fleet. Якщо користувач `codex` вже існує,
+Створити окремого користувача для fleet. Якщо користувач `WORKER_USER` вже існує,
 цей крок пропустити:
 
 ```bash
-sudo adduser codex
+sudo adduser WORKER_USER
 ```
 
 Запустити SSH і додати його до автозапуску:
@@ -55,7 +63,7 @@ hostname -I
 За бажанням одразу задати зрозуміле ім'я вузла:
 
 ```bash
-sudo hostnamectl set-hostname old-ubuntu-worker
+sudo hostnamectl set-hostname WORKER_HOSTNAME
 ```
 
 ### Чи потрібно редагувати `/etc/hosts`?
@@ -68,7 +76,7 @@ IP-адресою або DNS-іменем, указаним у власному 
 замість IP, достатньо додати запис лише на master:
 
 ```text
-WORKER_IP old-ubuntu-worker
+WORKER_IP WORKER_HOSTNAME
 ```
 
 Редагувати `/etc/hosts` на worker варто лише якщо worker сам має ініціювати
@@ -97,17 +105,17 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_codex_fleet \
 З master виконати:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519_codex_fleet.pub codex@WORKER_IP
+ssh-copy-id -i ~/.ssh/id_ed25519_codex_fleet.pub WORKER_USER@WORKER_IP
 ```
 
-Ввести пароль користувача `codex` один раз. Після успішної перевірки SSH-ключа
+Ввести пароль користувача `WORKER_USER` один раз. Після успішної перевірки SSH-ключа
 пароль більше не потрібен.
 
 Якщо `ssh-copy-id` відсутній:
 
 ```bash
 cat ~/.ssh/id_ed25519_codex_fleet.pub | \
-  ssh codex@WORKER_IP 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys'
+  ssh WORKER_USER@WORKER_IP 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys'
 ```
 
 ## 4. Встановити Ollama на worker
@@ -143,9 +151,9 @@ ollama ps
 Додати до `~/.ssh/config` master:
 
 ```sshconfig
-Host old-ubuntu-worker
+Host WORKER_ALIAS
     HostName WORKER_IP
-    User codex
+    User WORKER_USER
     IdentityFile ~/.ssh/id_ed25519_codex_fleet
     IdentitiesOnly yes
     ConnectTimeout 5
@@ -154,16 +162,16 @@ Host old-ubuntu-worker
 Перевірити підключення:
 
 ```bash
-ssh old-ubuntu-worker 'hostname; id -un; ollama list; ollama ps'
+ssh WORKER_ALIAS 'hostname; id -un; ollama list; ollama ps'
 ```
 
-Очікувано побачити ім'я ноутбука, `codex`, список моделей і поточні запущені
+Очікувано побачити ім'я ноутбука, `WORKER_USER`, список моделей і поточні запущені
 моделі.
 
 ## 6. Перевірити виконання prompt
 
 ```bash
-ssh old-ubuntu-worker \
+ssh WORKER_ALIAS \
   'ollama run MODEL_NAME "Відповідай одним коротким реченням: worker online?"'
 ```
 
@@ -172,8 +180,8 @@ ssh old-ubuntu-worker \
 Якщо команда не працює, спочатку перевірити SSH окремо, потім стан Ollama:
 
 ```bash
-ssh old-ubuntu-worker 'systemctl is-active ssh; systemctl is-active ollama'
-ssh old-ubuntu-worker 'curl -fsS http://127.0.0.1:11434/api/tags'
+ssh WORKER_ALIAS 'systemctl is-active ssh; systemctl is-active ollama'
+ssh WORKER_ALIAS 'curl -fsS http://127.0.0.1:11434/api/tags'
 ```
 
 ## 7. Обмежити SSH доступ master
@@ -196,7 +204,7 @@ sudoedit /etc/ssh/sshd_config.d/codex-fleet.conf
 ```text
 PasswordAuthentication no
 PubkeyAuthentication yes
-AllowUsers codex
+AllowUsers WORKER_USER
 ```
 
 Перевірити конфігурацію та перезапустити SSH:
@@ -209,7 +217,7 @@ sudo systemctl restart ssh
 ## Результат
 
 Після цього worker не потребує Codex, NATS або ручного запуску команд. На master
-достатньо стабільного SSH-аліаса `old-ubuntu-worker`; fleet зможе виконувати
+достатньо стабільного SSH-аліаса `WORKER_ALIAS`; fleet зможе виконувати
 discovery (`hostname`, `ollama list`, `ollama ps`) і передавати prompt-задачі.
 
 ## Не передавати та не відкривати

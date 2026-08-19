@@ -28,17 +28,17 @@ codex-fleet
 Initial examples:
 
 ```bash
-codex-fleet worker add jetson \
-  --ssh-host jetson-codex \
+codex-fleet worker add WORKER_NAME \
+  --ssh-host WORKER_SSH_ALIAS \
   --check
 
 codex-fleet worker list
-codex-fleet worker check jetson
+codex-fleet worker check WORKER_NAME
 codex-fleet worker check --all --format json
-codex-fleet worker inspect jetson
-codex-fleet worker warmup jetson --model qwen3.5:35b-a3b
-codex-fleet worker run jetson \
-  --model qwen3.5:35b-a3b \
+codex-fleet worker inspect WORKER_NAME
+codex-fleet worker warmup WORKER_NAME --model MODEL_NAME
+codex-fleet worker run WORKER_NAME \
+  --model MODEL_NAME \
   --prompt "Summarize the current worker status." \
   --keep-alive 10m \
   --timeout 10m
@@ -116,7 +116,7 @@ Human-readable output is the default. Every read or check command should support
 stable JSON output for automation:
 
 ```bash
-codex-fleet worker inspect jetson --format json
+codex-fleet worker inspect WORKER_NAME --format json
 ```
 
 The first implementation uses stable non-zero exit statuses for failure classes:
@@ -143,5 +143,5 @@ Error messages go to stderr; command results go to stdout.
 - repository synchronization or remote shell execution;
 - implicit selection of a worker or model.
 
-These features can be added after the deterministic SSH path is exercised on the
-Jetson, native Ubuntu, and WSL2 worker.
+These features can be added after the deterministic SSH path is exercised on
+native Ubuntu and WSL2 workers.

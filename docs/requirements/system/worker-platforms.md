@@ -35,7 +35,7 @@ Initial launch:
 ```powershell
 .\codex-fleet-agent.exe agent `
   --master http://MASTER_HOST:8765 `
-  --name aorus5-se4
+    --name windows-worker
 ```
 
 The worker reports its identity, Ollama models, active model, queue state, and available capacity. It receives simple prompt jobs and returns structured results.
@@ -70,7 +70,7 @@ Windows 11
             -> outbound connection to the master
 ```
 
-This is useful when the user already has a Linux-oriented setup or wants to reuse the Linux binary and shell scripts. The validated deployment pattern is a dedicated Linux user inside the WSL2 distribution, an SSH key exchanged with the master, and a stable SSH alias. In that mode the Windows laptop is treated as a Linux worker, just like the Jetson.
+This is useful when the user already has a Linux-oriented setup or wants to reuse the Linux binary and shell scripts. The validated deployment pattern is a dedicated Linux user inside the WSL2 distribution, an SSH key exchanged with the master, and a stable SSH alias. In that mode the Windows laptop is treated as a Linux worker.
 
 Enabling WSL2 normally requires administrator access, Windows optional features, hardware virtualization, and usually a restart. Therefore it cannot satisfy the strict “no admin privileges on a clean laptop” requirement, but it does not require further administrative access after the Linux environment and SSH transport have been configured.
 
@@ -83,12 +83,24 @@ Linux path. Newer Ubuntu releases are supported. Linux hosts may use the
 already working SSH transport. The first known worker is:
 
 ```text
-ssh jetson-codex
+ssh WORKER_SSH_ALIAS
 ```
 
 The master can execute discovery and one-shot jobs over this alias. A persistent Linux agent may be added later for push heartbeats and lower-latency scheduling.
 
 ## Worker discovery and registration
+
+### Worker onboarding contract
+
+The intended public onboarding flow must require only the master's hostname or
+IP address from the worker operator. The worker must install or start a small
+outbound component that registers with the master and reports its identity,
+Ollama models, and capacity. The worker operator must not need to know the
+worker's own address, configure an inbound firewall rule, or edit the master's
+SSH configuration.
+
+This contract is the target for CF-009. It is not yet implemented by the current
+SSH-only CLI.
 
 SSH does not discover unknown hosts. An SSH-based worker must first be added to
 the master's registry or SSH configuration. The first MVP therefore uses an
@@ -103,9 +115,9 @@ The future user-facing command should make this a single operation, for example:
 
 ```bash
 codex-fleet worker add \
-  --name old-ubuntu-worker \
-  --address 192.168.68.80 \
-  --user codex \
+  --name WORKER_NAME \
+  --address WORKER_ADDRESS \
+  --user WORKER_USER \
   --identity ~/.ssh/id_ed25519_codex_fleet
 ```
 

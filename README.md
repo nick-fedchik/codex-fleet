@@ -20,6 +20,12 @@ server, `curl`, Ollama, and the requested models. The onboarding guides are in
 [`docs/guides`](docs/guides). Requirements and implementation state are tracked
 in [`docs/requirements/status.md`](docs/requirements/status.md).
 
+The target worker onboarding contract is simpler: the worker owner should need
+to know only the master's hostname or IP address. The current SSH transport is
+a transitional fallback and still requires the master operator to know the
+worker's SSH address. Outbound registration with master-only bootstrap is tracked
+as CF-009.
+
 Monitoring TUI, dynamic outbound registration, NATS, native Windows agent, and
 repository workspace jobs are intentionally later milestones.
 
@@ -123,24 +129,24 @@ The master must be able to connect to the worker using an SSH alias. Example
 `~/.ssh/config` entry:
 
 ```sshconfig
-Host jetson-codex
-    HostName 192.168.68.72
-    User codex
-    IdentityFile ~/.ssh/id_ed25519_jetson_codex
+Host worker-alias
+    HostName WORKER_IP_OR_DNS_NAME
+    User WORKER_SSH_USER
+    IdentityFile ~/.ssh/id_ed25519_codex_fleet
     IdentitiesOnly yes
 ```
 
 Verify SSH first:
 
 ```bash
-ssh jetson-codex 'hostname; id -un; ollama list'
+ssh worker-alias 'hostname; id -un; ollama list'
 ```
 
 Register and verify the worker:
 
 ```bash
-codex-fleet worker add jetson \
-  --ssh-host jetson-codex \
+codex-fleet worker add WORKER_NAME \
+  --ssh-host worker-alias \
   --check
 ```
 
@@ -154,16 +160,16 @@ codex-fleet config path
 
 ```bash
 codex-fleet worker list
-codex-fleet worker check jetson
+codex-fleet worker check WORKER_NAME
 codex-fleet worker check --all --format json
-codex-fleet worker inspect jetson --format json
+codex-fleet worker inspect WORKER_NAME --format json
 ```
 
 Warm up a large model before sending work:
 
 ```bash
-codex-fleet worker warmup jetson \
-  --model gpt-oss:20b \
+codex-fleet worker warmup WORKER_NAME \
+  --model MODEL_NAME \
   --keep-alive 10m \
   --timeout 10m \
   --format json
@@ -172,8 +178,8 @@ codex-fleet worker warmup jetson \
 Run a prompt and receive timing metrics:
 
 ```bash
-codex-fleet worker run jetson \
-  --model gpt-oss:20b \
+codex-fleet worker run WORKER_NAME \
+  --model MODEL_NAME \
   --prompt "Reply with exactly: worker online" \
   --keep-alive 10m \
   --timeout 10m \
