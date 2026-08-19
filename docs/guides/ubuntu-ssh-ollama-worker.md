@@ -131,34 +131,43 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_codex_fleet \
 Приватний файл `~/.ssh/id_ed25519_codex_fleet` залишається тільки на master.
 На worker передається лише `~/.ssh/id_ed25519_codex_fleet.pub`.
 
+Показати публічний ключ, щоб передати його власнику worker через приватний
+канал зв'язку:
+
+```bash
+cat ~/.ssh/id_ed25519_codex_fleet.pub
+```
+
+Підійде особисте повідомлення, email або інший погоджений канал. Пароль
+worker-користувача передавати не потрібно.
+
 Потрібен файл `~/.ssh/id_ed25519_codex_fleet.pub`. Приватний файл без `.pub`
 нікому не передавати.
 
 Якщо master уже має окремий ключ для цього fleet, можна використати його
 публічну частину замість створення нової пари.
 
-## 3. Передати ключ на worker
+## 3. Додати ключ на worker
 
-Перший запуск `ssh-copy-id` може попросити пароль `WORKER_USER`. Це нормальний
-одноразовий крок: після нього master входить без пароля через приватний ключ.
-
-З master виконати:
-
-```bash
-ssh-copy-id -i ~/.ssh/id_ed25519_codex_fleet.pub WORKER_USER@WORKER_IP
-```
-
-Ввести пароль користувача `WORKER_USER` один раз. Після успішної перевірки SSH-ключа
-пароль більше не потрібен.
-
-Якщо `ssh-copy-id` відсутній:
+На worker інсталятор попросить вставити один рядок master public key. Якщо
+інсталятор уже був запущений без ключа, додати його вручну під поточним
+`WORKER_USER`:
 
 ```bash
-cat ~/.ssh/id_ed25519_codex_fleet.pub | \
-  ssh WORKER_USER@WORKER_IP 'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys'
+install -d -m 700 ~/.ssh
+printf '%s\n' 'MASTER_PUBLIC_KEY' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
 ```
 
-Перевірити безпарольний доступ:
+`MASTER_PUBLIC_KEY` має бути одним повним рядком, що починається з `ssh-ed25519`
+або іншого дозволеного типу OpenSSH. Не додавати переносів рядка всередині
+ключа.
+
+Власник worker повідомляє master operator лише `WORKER_HOST` або `WORKER_IP`,
+`WORKER_USER` і, якщо потрібно, SSH-порт. Пароль worker-користувача master
+operator не отримує.
+
+Після цього master operator перевіряє безпарольний доступ:
 
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=5 \

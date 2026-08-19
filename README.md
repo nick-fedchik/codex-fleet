@@ -53,7 +53,7 @@ installation instructions](https://go.dev/doc/install) when necessary.
 
 - Git;
 - Go 1.25 or newer;
-- OpenSSH client (`ssh` and `ssh-copy-id` for onboarding).
+- OpenSSH client (`ssh`; `ssh-copy-id` is optional for already-administered hosts).
 
 The only Go module dependency is Cobra, declared in [`go.mod`](go.mod). Go
 downloads it automatically; do not install Cobra, Python, Node.js, Docker, or
@@ -100,6 +100,8 @@ chmod 0755 install-ubuntu-worker.sh
 The script checks Ubuntu 24.04+, installs SSH and Ollama, enables their services,
 creates a worker key, and writes `~/.config/codex-fleet/worker.env`. It does not
 create a user, download an unspecified model, or change the master's SSH keys.
+During an interactive run it can add the master's one-line public key to the
+current user's `authorized_keys`.
 For the current inbound SSH transport, generate the access key on the master and
 copy only its `.pub` file to the worker's `authorized_keys`; see the
 [Ubuntu worker guide](docs/guides/ubuntu-ssh-ollama-worker.md).

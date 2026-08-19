@@ -7,6 +7,7 @@ readonly MIN_UBUNTU_VERSION="24.04"
 readonly CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/codex-fleet"
 readonly CONFIG_FILE="$CONFIG_DIR/worker.env"
 readonly SSH_DIR="$HOME/.ssh"
+readonly AUTHORIZED_KEYS="$SSH_DIR/authorized_keys"
 readonly WORKER_KEY="${CODEX_FLEET_WORKER_KEY:-$SSH_DIR/id_ed25519_codex_fleet_worker}"
 
 usage() {
@@ -16,6 +17,10 @@ Usage:
 
 MASTER_HOST is the master's DNS name or IP address. Run this script as the
 already-created worker user, not as root. The user must have sudo access.
+
+The script optionally asks for the master's one-line public SSH key and adds it
+to this user's authorized_keys. It can also be supplied through
+CODEX_FLEET_MASTER_PUBLIC_KEY for non-interactive use.
 EOF
 }
 
@@ -109,6 +114,29 @@ fi
 umask 077
 mkdir -p "$SSH_DIR" "$CONFIG_DIR"
 chmod 700 "$SSH_DIR" "$CONFIG_DIR"
+
+MASTER_PUBLIC_KEY=${CODEX_FLEET_MASTER_PUBLIC_KEY:-}
+if [[ -z "$MASTER_PUBLIC_KEY" && -t 0 ]]; then
+    printf '%s\n' 'Paste the master public SSH key (press Enter to skip):'
+    IFS= read -r MASTER_PUBLIC_KEY
+fi
+
+if [[ -n "$MASTER_PUBLIC_KEY" ]]; then
+    [[ $MASTER_PUBLIC_KEY != *$'\n'* && $MASTER_PUBLIC_KEY != *$'\r'* ]] || \
+        die "master public key must be one line"
+    printf '%s\n' "$MASTER_PUBLIC_KEY" | ssh-keygen -lf - >/dev/null 2>&1 || \
+        die "master public key is not a valid OpenSSH public key"
+    touch "$AUTHORIZED_KEYS"
+    chmod 600 "$AUTHORIZED_KEYS"
+    if grep -Fqx -- "$MASTER_PUBLIC_KEY" "$AUTHORIZED_KEYS"; then
+        log "master public key is already authorized"
+    else
+        printf '%s\n' "$MASTER_PUBLIC_KEY" >>"$AUTHORIZED_KEYS"
+        log "master public key added to $AUTHORIZED_KEYS"
+    fi
+else
+    warn "master public key was not supplied; passwordless master SSH is not configured"
+fi
 
 if [[ ! -e "$WORKER_KEY" ]]; then
     log "creating worker SSH key"
