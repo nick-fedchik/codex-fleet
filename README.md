@@ -93,8 +93,6 @@ needed, grants it `sudo` access, and continues as that user:
 ```bash
 curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
-curl -fsSL https://github.com/nick-fedchyk/codex-fleet/releases/latest/download/master.pub \
-  -o master.pub
 chmod 0755 install-ubuntu-worker.sh
 sudo ./install-ubuntu-worker.sh MASTER_HOST
 ```
@@ -109,8 +107,9 @@ The script checks Ubuntu 24.04+, installs SSH and Ollama, enables their services
 creates a worker key, and writes `~/.config/codex-fleet/worker.env`. It does not
 download an unspecified model or change the master's SSH keys. Existing worker
 users and keys are reused.
-When `master.pub` is downloaded beside the installer, it is used automatically;
-otherwise the installer fetches the canonical key from GitHub.
+The canonical master public key is bundled in the installer, so downloading
+`master.pub` separately is optional. A neighboring `master.pub` or
+`CODEX_FLEET_MASTER_PUBLIC_KEY` can override it for custom deployments.
 During an interactive run it can add the master's one-line public key to the
 current user's `authorized_keys`.
 For the current inbound SSH transport, the canonical public key is stored in

@@ -34,8 +34,6 @@
 ```bash
 curl -fsSL https://github.com/nick-fedchik/codex-fleet/releases/latest/download/install-ubuntu-worker.sh \
   -o install-ubuntu-worker.sh
-curl -fsSL https://github.com/nick-fedchyk/codex-fleet/releases/latest/download/master.pub \
-  -o master.pub
 chmod 0755 install-ubuntu-worker.sh
 sudo ./install-ubuntu-worker.sh MASTER_HOST
 ```
@@ -50,9 +48,10 @@ sudo ./install-ubuntu-worker.sh --worker-user ai-worker MASTER_HOST
 наявність доступу до `sudo`. Під час створення нового користувача Ubuntu
 запитає його пароль.
 
-Файл `master.pub`, який лежить поруч із installer, буде використаний
-автоматично; якщо його немає, installer спробує завантажити canonical key із
-GitHub і лише після цього попросить вставити ключ вручну.
+Canonical public key master уже вбудований в installer, тому окремо копіювати
+або вставляти його не потрібно. Файл `master.pub`, який лежить поруч із
+installer, або `CODEX_FLEET_MASTER_PUBLIC_KEY` можуть перевизначити ключ для
+custom/offline deployment.
 
 Якщо репозиторій уже склоновано, замість завантаження можна запустити:
 

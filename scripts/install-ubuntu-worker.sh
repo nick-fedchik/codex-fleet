@@ -13,6 +13,7 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
 readonly LOCAL_MASTER_KEY_FILE="$SCRIPT_DIR/master.pub"
 readonly REPO_MASTER_KEY_FILE="$SCRIPT_DIR/../config/master.pub"
+readonly DEFAULT_MASTER_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJF28jVGywii+rWyB+JxO0EGKdeolK4s/hxEtX/D1wTL codex-fleet-master"
 readonly MASTER_KEY_URL="${CODEX_FLEET_MASTER_KEY_URL:-https://github.com/nick-fedchik/codex-fleet/releases/latest/download/master.pub}"
 declare -a WARNINGS=()
 
@@ -35,9 +36,9 @@ worker user. When run as root, the default worker username is "worker"; the
 script creates it when needed, grants it sudo access, and continues as that
 user. Use --worker-user to choose another username.
 
-The script reads the master's public SSH key from config/master.pub when run
-from a clone. It can also fetch the canonical key from GitHub, use
-CODEX_FLEET_MASTER_PUBLIC_KEY, or ask for the key interactively.
+The script has the canonical codex-fleet master's public key built in. It can
+also use CODEX_FLEET_MASTER_PUBLIC_KEY, a neighboring master.pub, or
+config/master.pub for custom/offline setups.
 
 --dry-run checks the platform and reports planned actions without changing the
 system, writing keys, or writing the worker configuration.
@@ -254,9 +255,8 @@ fi
 if [[ -z "$MASTER_PUBLIC_KEY" ]]; then
     MASTER_PUBLIC_KEY=$(curl --silent --fail --show-error --max-time 10 "$MASTER_KEY_URL" 2>/dev/null || true)
 fi
-if [[ -z "$MASTER_PUBLIC_KEY" && -t 0 ]]; then
-    printf '%s\n' 'Paste the master public SSH key (press Enter to skip):'
-    IFS= read -r MASTER_PUBLIC_KEY
+if [[ -z "$MASTER_PUBLIC_KEY" ]]; then
+    MASTER_PUBLIC_KEY=$DEFAULT_MASTER_PUBLIC_KEY
 fi
 
 if [[ -n "$MASTER_PUBLIC_KEY" ]]; then
